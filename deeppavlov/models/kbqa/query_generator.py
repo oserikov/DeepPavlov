@@ -45,10 +45,12 @@ class QueryGenerator(Component, Serializable):
         question = question_tuple[0]
         self.template_num  = template_type[0]
         #entity_ids = [self.linker(entity)[:10] for entity in entities]
+        '''
         print("question", question)
         print("template_type", template_type)
         print("entities", entities)
         print("entity_ids", entity_ids)
+        '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
        
         self.template_num = 2
@@ -254,14 +256,18 @@ class QueryGenerator(Component, Serializable):
 
     def find_relevant_subgraph_cqwq(self, ent_combs, rels):
         candidate_outputs = []
-
+        
+        print("rels", rels)
         for ent_comb in ent_combs:
             for rel in rels:
                 objects_1 = self.wiki_parser("objects", "forw", ent_comb[0], rel, type_of_rel="direct")
+                print("objects_1", objects_1)
                 for obj in objects_1:
                     if self.template_num == 2:
                         answer_triplets = self.wiki_parser("triplets", "forw", obj, type_of_rel="qualifier")
+                        print("answer_triplets", answer_triplets)
                         second_rels = self.wiki_parser("rels", "backw", ent_comb[1], rel, obj, type_of_rel="statement")
+                        print("second_rels", second_rels)
                         if len(second_rels) > 0 and len(answer_triplets) > 0:
                             for ans in answer_triplets:
                                 candidate_outputs.append((rel, ans[1], ans[2]))
