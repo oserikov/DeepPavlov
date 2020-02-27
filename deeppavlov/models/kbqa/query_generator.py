@@ -14,7 +14,7 @@ dataset = json.loads(fl)
 
 @register('query_generator')
 class QueryGenerator(Component, Serializable):
-    def __init__(self, linker: EntityLinkerCQ,
+    def __init__(self, #linker: EntityLinkerCQ,
                        wiki_parser: WikiParser,
                        rel_ranker: RelRankerInfer,
                        load_path: str,
@@ -22,7 +22,7 @@ class QueryGenerator(Component, Serializable):
                        rank_rels_filename_2: str, **kwargs):
      
         super().__init__(save_path=None, load_path=load_path)
-        self.linker = linker
+        #self.linker = linker
         self.wiki_parser = wiki_parser
         self.rel_ranker = rel_ranker
         self.rank_rels_filename_1 = rank_rels_filename_1
@@ -44,7 +44,7 @@ class QueryGenerator(Component, Serializable):
     def __call__(self, question_tuple, template_type, entities):
         question = question_tuple[0]
         self.template_num  = template_type[0]
-        entity_ids = [self.linker(entity)[:10] for entity in entities]
+        #entity_ids = [self.linker(entity)[:10] for entity in entities]
         print("question", question)
         print("template_type", template_type)
         print("entities", entities)
