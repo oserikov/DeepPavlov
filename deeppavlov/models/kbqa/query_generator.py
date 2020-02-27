@@ -9,7 +9,8 @@ from typing import Union
 from deeppavlov.models.kbqa.entity_linking_cq import EntityLinkerCQ
 from deeppavlov.models.kbqa.wiki_parser import WikiParser
 from deeppavlov.models.kbqa.rel_ranking_infer import RelRankerInfer
-
+fl = open("/home/evseev/LC-QUAD2.0/test.json").read()
+dataset = json.loads(fl)
 
 @register('query_generator')
 class QueryGenerator(Component, Serializable):
@@ -49,7 +50,7 @@ class QueryGenerator(Component, Serializable):
         print("entities", entities)
         print("entity_ids", entity_ids)
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
-        
+       
         self.template_num = 2
         entity_ids = [["Q9364"], ["Q42810"]]
 
