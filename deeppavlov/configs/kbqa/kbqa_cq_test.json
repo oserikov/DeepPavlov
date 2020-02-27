@@ -1,0 +1,112 @@
+{
+  "dataset_reader": {
+    "class_name": "sq_reader",
+    "data_path": "{DOWNLOADS_PATH}/lcquad/entity_detection_dataset.pickle"
+  },
+  "dataset_iterator": {
+    "class_name": "data_learning_iterator"
+  },
+  "chainer": {
+    "in": ["x"],
+    "in_y": ["y"],
+    "pipe": [
+      {
+        "config_path": "{CONFIGS_PATH}/ner/ner_lcquad_bert_probas.json",
+        "in": ["x"],
+        "out": ["x_tokens", "y_pred"]
+      },
+      {
+        "in": ["x_tokens", "y_pred"],
+        "out": ["entities"],
+        "class_name": "entity_detection_parser"
+      },
+      {
+        "config_path": "{CONFIGS_PATH}/classifiers/query_pr.json",
+        "in": ["x"],
+        "out": ["template_type"]
+      },
+      {
+        "config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json",
+        "id": "bert_rel_ranker"
+      },
+      {
+        "class_name": "wiki_parser",
+        "id": "wiki_p",
+        "wiki_filename": "{DOWNLOADS_PATH}/wikidata_eng/wikidata2018_09_11.hdt"
+      },
+      {
+        "class_name": "rel_ranking_infer",
+        "id": "rel_r_inf",
+        "ranker": {"config_path": "{CONFIGS_PATH}/ranking/rel_ranking.json"},
+        "load_path": "{DOWNLOADS_PATH}/wikidata_eng",
+        "rel_q2name_filename": "wiki_dict_properties.pickle"
+      },
+      {
+        "class_name": "query_generator",
+        "id": "query_g",
+        "rel_ranker": "#rel_r_inf",
+        "rel_ranker_bert": {"config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json"},
+        "wiki_parser": "#wiki_p",
+        "load_path": "{DOWNLOADS_PATH}/wikidata_eng",
+        "rank_rels_filename_1": "rels_0.txt",
+        "rank_rels_filename_2": "rels_1.txt",
+        "in": ["x", "template_type", "entities"],
+        "out": ["answers"]
+      }
+    ],
+    "out": ["answers"]
+  },
+  "train": {
+    "epochs": 30,
+    "batch_size": 16,
+    "metrics": [
+      {
+        "name": "ner_f1",
+        "inputs": ["y", "y_pred"]
+      },
+      {
+        "name": "ner_token_f1",
+        "inputs": ["y", "y_pred"]
+      }
+    ],
+    "validation_patience": 10,
+    "val_every_n_batches": 400,
+
+    "log_every_n_batches": 400,
+    "tensorboard_log_dir": "{NER_PATH}/logs",
+    "show_examples": false,
+    "pytest_max_batches": 2,
+    "pytest_batch_size": 8,
+    "evaluation_targets": ["valid", "test"],
+    "class_name": "nn_trainer"
+  },
+  "metadata": {
+    "variables": {
+      "ROOT_PATH": "~/.deeppavlov",
+      "DOWNLOADS_PATH": "{ROOT_PATH}/downloads",
+      "MODELS_PATH": "{ROOT_PATH}/models",
+      "BERT_PATH": "{DOWNLOADS_PATH}/bert_models/cased_L-12_H-768_A-12",
+      "NER_PATH": "{MODELS_PATH}/ner_lcquad",
+      "CONFIGS_PATH": "{DEEPPAVLOV_PATH}/configs"
+    },
+    "requirements": [
+      "{DEEPPAVLOV_PATH}/requirements/tf.txt",
+      "{DEEPPAVLOV_PATH}/requirements/bert_dp.txt"
+    ],
+    "labels": {
+      "telegram_utils": "NERCoNLL2003Model",
+      "server_utils": "NER"
+    },
+    "download": [
+
+      {
+        "url": "http://files.deeppavlov.ai/deeppavlov_data/ner_ontonotes_bert_v1.tar.gz",
+        "subdir": "{MODELS_PATH}"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/cased_L-12_H-768_A-12.zip",
+        "subdir": "{DOWNLOADS_PATH}/bert_models"
+      }
+    ]
+  }
+}
