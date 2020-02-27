@@ -1,25 +1,21 @@
 import json
 import re
-import pickle
-from fuzzywuzzy import fuzz
 import nltk
 from deeppavlov.core.common.chainer import Chainer
 from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
+from deeppavlov.core.models.serializable import Serializable
+from typing import Union
 from deeppavlov.models.kbqa.entity_linking_cq import EntityLinkerCQ
-from deeppavlov.models.wiki_parser import WikiParser
-from rel_ranking_infer import RelRankerInfer
-
-fl = open("/home/evseev/LC-QUAD2.0/test.json").read()
-dataset = json.loads(fl)
+from deeppavlov.models.kbqa.wiki_parser import WikiParser
+from deeppavlov.models.kbqa.rel_ranking_infer import RelRankerInfer
 
 
 @register('query_generator')
-class QueryGenerator:
+class QueryGenerator(Component, Serializable):
     def __init__(self, linker: EntityLinkerCQ,
                        wiki_parser: WikiParser,
                        rel_ranker: RelRankerInfer,
-                       rel_ranker_bert: Union[Chainer, Component],
                        load_path: str,
                        rank_rels_filename_1: str,
                        rank_rels_filename_2: str, **kwargs):
@@ -28,54 +24,57 @@ class QueryGenerator:
         self.linker = linker
         self.wiki_parser = wiki_parser
         self.rel_ranker = rel_ranker
-        self.rel_ranker_bert = rel_ranker_bert
         self.rank_rels_filename_1 = rank_rels_filename_1
         self.rank_rels_filename_2 = rank_rels_filename_2
         self.load()
 
     def load(self) -> None:
-        with open(self.load_path / self.rank_rels_filename_1, 'rb') as fl1:
+        with open(self.load_path / self.rank_rels_filename_1, 'r') as fl1:
             lines = fl1.readlines()
             self.rank_list_0 = [line.split('\t')[0] for line in lines]
 
-        with open(self.load_path / self.rank_rels_filename_2, 'rb') as fl2:
+        with open(self.load_path / self.rank_rels_filename_2, 'r') as fl2:
             lines = fl2.readlines()
             self.rank_list_1 = [line.split('\t')[0] for line in lines]
 
     def save(self) -> None:
         pass
 
-    def __call__(self, question, template_type, entities):
+    def __call__(self, question_tuple, template_type, entities):
+        question = question_tuple[0]
+        self.template_num  = template_type[0]
+        entity_ids = [self.linker(entity)[:10] for entity in entities]
+        print("question", question)
+        print("template_type", template_type)
+        print("entities", entities)
+        print("entity_ids", entity_ids)
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
-        question_tokens = nltk.word_tokenize(question)
-        template_num  = template_type[0][0]
         
-        question = 
-        template_num[0][0] = 2
-        entity_ids = [["Q1371154"], ["Q7589655"]]
+        self.template_num = 2
+        entity_ids = [["Q9364"], ["Q42810"]]
 
-        if template_num == 0 or template_num == 1:
+        if self.template_num == 0 or self.template_num == 1:
             candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
 
-        if template_num == 2 or template_num == 3:
+        if self.template_num == 2 or self.template_num == 3:
             candidate_outputs = self.complex_question_with_qualifier_solver(question, entity_ids)
 
-        if template_num == 4:
+        if self.template_num == 4:
             candidate_outputs = self.questions_with_count_solver(question, entity_ids)
 
-        if template_num[0][0] == 5:
+        if self.template_num == 5:
             candidate_outputs = self.maxmin_one_entity_solver(question, entity_ids[0][:5])
 
-        if template_num[0][0] == 6:
+        if self.template_num == 6:
             candidate_outputs = self.maxmin_two_entities_solver(question, entity_ids)
 
-        if template_num[0][0] == 7:
+        if self.template_num == 7:
             candidate_outputs = self.two_hop_solver(question, entity_ids)
 
         print(candidate_outputs)
-                    
-            
-        #print(probas[0])
+
+        return candidate_outputs
+
 
     def complex_question_with_number_solver(self, question, entity_ids):
         question_tokens = nltk.word_tokenize(question)
@@ -118,7 +117,7 @@ class QueryGenerator:
 
             ent_combs = sorted(ent_combs, key=lambda x: x[2])
 
-            candidate_outputs = self.find_relevant_subgraph_cqwq(entity_ids[0][:5], top_rels[:5])
+            candidate_outputs = self.find_relevant_subgraph_cqwq(ent_combs, top_rels[:5])
 
         return candidate_outputs
 
@@ -134,23 +133,26 @@ class QueryGenerator:
         ex_rels = list(set(ex_rels))
         scores = self.rel_ranker(question, ex_rels)
         top_rels = [score[0] for score in scores]
-        for rel in top_rels:
-            answers += self.wiki_parser("objects", "forw", entity, top_rels[0], type_of_rel="direct")
-            if len(answers) > 0:
-                candidate_outputs.append(rel, len(answers))
-            else:
-                answers += self.wiki_parser("objects", "backw", entity, top_rels[0], type_of_rel="direct")
-                candidate_outputs.append(rel, len(answers))
+        answers = []
+        for entity_id in entity_ids:
+            for entity in entity_id[:5]:
+                for rel in top_rels:
+                    answers += self.wiki_parser("objects", "forw", entity, top_rels[0], type_of_rel="direct")
+                    if len(answers) > 0:
+                        candidate_outputs.append(rel, len(answers))
+                    else:
+                        answers += self.wiki_parser("objects", "backw", entity, top_rels[0], type_of_rel="direct")
+                        candidate_outputs.append(rel, len(answers))
 
         return candidate_outputs
     
     def maxmin_one_entity_solver(self, question, entities_list):
         scores = self.rel_ranker(question, self.rank_list_0)
         top_rels = [score[0] for score in scores]
-        asc_desc = self.asc_desc(question)
+        ascending = self.asc_desc(question)
         candidate_outputs = self.find_relevant_subgraph_maxmin_one(entities_list, top_rels[:5])
         reverse = False
-        if acs_desc == "ASC":
+        if ascending:
             reverse = True
         candidate_outputs = sorted(candidate_outputs, key=lambda x: x[1], reverse=reverse)
 
@@ -182,9 +184,9 @@ class QueryGenerator:
 
             candidate_outputs = self.find_relevant_subgraph_maxmin_two(ent_combs, top_rels_1[:5], top_rels_2[:5])
 
-            asc_desc = self.asc_desc(question)
+            ascending = self.asc_desc(question)
             reverse = False
-            if acs_desc == "ASC":
+            if ascending:
                 reverse = True
             candidate_outputs = sorted(candidate_outputs, key=lambda x: x[1], reverse=reverse)
 
@@ -225,47 +227,47 @@ class QueryGenerator:
             
             return candidate_outputs
 
-    def find_relevant_subgraph_cqwn(self, entities_list, rels, num, template_type):
+    def find_relevant_subgraph_cqwn(self, entities_list, rels, num):
         candidate_outputs = []
 
         for entity in entities_list:
             for rel in rels:
                 objects_1 = self.wiki_parser("objects", "forw", entity, rel, type_of_rel="direct")
                 for obj in objects_1:
-                    if template_type == 0:
+                    if self.template_num == 0:
                         answers = self.wiki_parser("objects", "forw", obj, rel, type_of_rel="statement")
                         second_rels = self.wiki_parser("rels", "forw", obj, type_of_rel="qualifier", filter_obj=num)
                         if len(second_rels) > 0 and len(answers) > 0:
                             for second_rel in second_rels:
                                 for ans in answers:
                                     candidate_outputs.append((rel, second_rel, ans))
-                    if template_type == 1:
+                    if self.template_num == 1:
                         answer_triplets = self.wiki_parser("triplets", "forw", obj, type_of_rel="qualifier")
-                        second_rels = self.wiki_parser("rels", "forw", obj, rel, type_of_rel="statement", filter_obj=num)
-                        if len(second_rels) > 0 and len(answers) > 0:
-                            for second_rel in second_rels:
-                                for ans in answer_triplets:
-                                    candidate_outputs.append((rel, ans[1], ans[2]))
+                        second_rels = self.wiki_parser("rels", "forw", obj, rel,
+                                                       type_of_rel="statement", filter_obj=num)
+                        if len(second_rels) > 0 and len(answer_triplets) > 0:
+                            for ans in answer_triplets:
+                                candidate_outputs.append((rel, ans[1], ans[2]))
                 
         return candidate_outputs
 
-    def find_relevant_subgraph_cqwq(self, ent_combs, rels, template_type):
+    def find_relevant_subgraph_cqwq(self, ent_combs, rels):
         candidate_outputs = []
 
         for ent_comb in ent_combs:
             for rel in rels:
                 objects_1 = self.wiki_parser("objects", "forw", ent_comb[0], rel, type_of_rel="direct")
                 for obj in objects_1:
-                    if template_type == 2:
+                    if self.template_num == 2:
                         answer_triplets = self.wiki_parser("triplets", "forw", obj, type_of_rel="qualifier")
                         second_rels = self.wiki_parser("rels", "backw", ent_comb[1], rel, obj, type_of_rel="statement")
-                        if len(second_rels) > 0 and len(answers) > 0:
-                            for second_rel in second_rels:
-                                for ans in answer_triplets:
-                                    candidate_outputs.append((rel, ans[1], ans[2]))
-                    if template_type == 3:
+                        if len(second_rels) > 0 and len(answer_triplets) > 0:
+                            for ans in answer_triplets:
+                                candidate_outputs.append((rel, ans[1], ans[2]))
+                    if self.template_num == 3:
                         answers = self.wiki_parser("objects", "forw", obj, rel, type_of_rel="statement")
-                        second_rels = self.wiki_parser("rels", "backw", ent_comb[1], rel=None, obj=obj, type_of_rel="qualifier", filter_obj=num)
+                        second_rels = self.wiki_parser("rels", "backw", ent_comb[1], rel=None,
+                                                       obj=obj, type_of_rel="qualifier")
                         if len(second_rels) > 0 and len(answers) > 0:
                             for second_rel in second_rels:
                                 for ans in answers:
@@ -277,9 +279,8 @@ class QueryGenerator:
         candidate_answers = []
 
         for entity in entities_list:
-            objects_1 = self.wiki_parser("objects", "backw", entities, "P31", type_of_rel="direct")
+            objects_1 = self.wiki_parser("objects", "backw", entity, "P31", type_of_rel="direct")
             for rel in rels:
-                found = False
                 candidate_answers = []
                 for obj in objects_1:
                     objects_2 = self.wiki_parser("objects", "forw", obj, rel, type_of_rel="direct", filter_obj="http://www.w3.org/2001/XMLSchema#decimal")
@@ -292,7 +293,7 @@ class QueryGenerator:
 
         return candidate_answers
 
-    def find_relevant_subgraph_maxmin_two(self, entities_list, rels_1, rels_2):
+    def find_relevant_subgraph_maxmin_two(self, ent_combs, rels_1, rels_2):
         candidate_answers = []
 
         for ent_comb in ent_combs:
@@ -301,7 +302,6 @@ class QueryGenerator:
                 objects_2 = self.wiki_parser("objects", "backw", ent_comb[1], rel_1, type_of_rel="direct")
                 objects_intersect = list(set(objects_1) & set(objects_2))
                 for rel_2 in rels_2:
-                    found = False
                     candidate_answers = []
                     for obj in objects_intersect:
                         objects_3 = self.wiki_parser("objects", "forw", obj, rel_2, type_of_rel="direct", filter_obj="http://www.w3.org/2001/XMLSchema#decimal")
@@ -365,14 +365,11 @@ class QueryGenerator:
         min_words = ["lowest", "smallest", "least", "min", "min("]
         for word in max_words:
             if word in question_lower:
-                return "DESC"
+                return False
 
         for word in min_words:
             if word in question_lower:
-                return "ASC"
-   
+                return True
 
-    
-generator = QueryGenerator()
-generator("When did James Thomas Farrell receive the St. Louis Literary Award?")
+        return True
 

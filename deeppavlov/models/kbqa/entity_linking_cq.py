@@ -61,7 +61,7 @@ class EntityLinkerCQ(Component, Serializable):
         return wiki_entities
 
     def candidate_entities_inverted_index(self, entity: str) -> List[Tuple[str]]:
-        word_tokens = nltk.word_tokenize(entity)
+        word_tokens = nltk.word_tokenize(entity.lower())
         candidate_entities = []
 
         for tok in word_tokens:

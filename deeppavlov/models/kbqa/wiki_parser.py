@@ -1,13 +1,16 @@
+from pathlib import Path
 from hdt import HDTDocument
+from deeppavlov.core.commands.utils import expand_path
 from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 
 @register('wiki_parser')
 class WikiParser(Component):
     def __init__(self, wiki_filename, **kwargs):
-        self.document = HDTDocument(wiki_filename)
+        wiki_path = expand_path(wiki_filename)
+        self.document = HDTDocument(str(wiki_path))
 
-    def __call(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None):
+    def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None):
         entity = "http://www.wikidata.org/entity/"+entity
         if rel is not None:
             rel = "http://www.wikidata.org/prop/{}/{}".format(type_of_rel, rel)
@@ -18,13 +21,13 @@ class WikiParser(Component):
             obj = ""
 
         if direction == "forw":
-            triplets, cardinality = document.search_triples(entity, rel, obj)
+            triplets, cardinality = self.document.search_triples(entity, rel, obj)
         if direction == "backw":
-            triplets, cardinality = document.search_triples(obj, rel, entity)
+            triplets, cardinality = self.document.search_triples(obj, rel, entity)
 
         found_triplets = []
         for triplet in triplets:
-            if filter_type is None or (filter_type is not None and filter_type in triplet[1]):
+            if type_of_rel is None or (type_of_rel is not None and type_of_rel in triplet[1]):
                 if filter_obj is None or (filter_obj is not None and filter_obj in triplet[2]):
                     found_triplets.append(triplet)
 
