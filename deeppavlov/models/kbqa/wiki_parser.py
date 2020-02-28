@@ -11,11 +11,18 @@ class WikiParser(Component):
         self.document = HDTDocument(str(wiki_path))
 
     def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None):
-        entity = "http://www.wikidata.org/entity/"+entity
+        if not entity.startswith("http://www.wikidata.org/"):
+            entity = "http://www.wikidata.org/entity/"+entity
+        print("entity", entity)
         if rel is not None:
-            rel = "http://www.wikidata.org/prop/{}/{}".format(type_of_rel, rel)
+            if type_of_rel is None:
+                rel = "http://www.wikidata.org/prop/{}".format(rel)
+            else:
+                rel = "http://www.wikidata.org/prop/{}/{}".format(type_of_rel, rel)
         else:
             rel = ""
+
+        print("rel", rel)
         
         if obj is None:
             obj = ""

@@ -53,8 +53,8 @@ class QueryGenerator(Component, Serializable):
         '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
        
-        self.template_num = 2
-        entity_ids = [["Q9364"], ["Q42810"]]
+        self.template_num = 1
+        entity_ids = [["Q753"]]
 
         if self.template_num == 0 or self.template_num == 1:
             candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
@@ -87,17 +87,19 @@ class QueryGenerator(Component, Serializable):
         ex_rels = list(set(ex_rels))
         scores = self.rel_ranker(question, ex_rels)
         top_rels = [score[0] for score in scores]
+        print(top_rels)
         year = self.extract_year(question_tokens, question)
         number = False
         if not year:
             number = self.extract_number(question_tokens, question)
+        print(year, number)
 
         candidate_outputs = []
             
         if year:
-            candidate_outputs = self.find_relevant_subgraph_cqwn(entity_ids[0][:5], top_rels[:5], year)
+            candidate_outputs = self.find_relevant_subgraph_cqwn(entity_ids[0][:5], top_rels[:7], year)
         if number:
-            candidate_outputs = self.find_relevant_subgraph_cqwn(entity_ids[0][:5], top_rels[:5], number)
+            candidate_outputs = self.find_relevant_subgraph_cqwn(entity_ids[0][:5], top_rels[:7], number)
 
         return candidate_outputs
 
@@ -235,11 +237,14 @@ class QueryGenerator(Component, Serializable):
 
         for entity in entities_list:
             for rel in rels:
-                objects_1 = self.wiki_parser("objects", "forw", entity, rel, type_of_rel="direct")
+                objects_1 = self.wiki_parser("objects", "forw", entity, rel, type_of_rel=None)
+                print("objects_1", objects_1)
                 for obj in objects_1:
                     if self.template_num == 0:
                         answers = self.wiki_parser("objects", "forw", obj, rel, type_of_rel="statement")
+                        print("answers", answers)
                         second_rels = self.wiki_parser("rels", "forw", obj, type_of_rel="qualifier", filter_obj=num)
+                        print("second_rels", second_rels)
                         if len(second_rels) > 0 and len(answers) > 0:
                             for second_rel in second_rels:
                                 for ans in answers:
@@ -257,7 +262,6 @@ class QueryGenerator(Component, Serializable):
     def find_relevant_subgraph_cqwq(self, ent_combs, rels):
         candidate_outputs = []
         
-        print("rels", rels)
         for ent_comb in ent_combs:
             for rel in rels:
                 objects_1 = self.wiki_parser("objects", "forw", ent_comb[0], rel, type_of_rel="direct")
