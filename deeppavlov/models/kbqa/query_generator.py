@@ -56,7 +56,7 @@ class QueryGenerator(Component, Serializable):
         print("entity_ids", entity_ids)
         '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
-        entities_from_template, rels = self.template_matcher(question)
+        entities_from_template, rels_from_template = self.template_matcher(question)
         entities = entities_from_template if entities_from_template else entities_from_ner
         #entity_ids = [self.linker(entity)[:10] for entity in entities]
        
@@ -64,7 +64,7 @@ class QueryGenerator(Component, Serializable):
         entity_ids = [["Q11173"], ["Q29006389"]]
 
         if self.template_num == 0 or self.template_num == 1:
-            candidate_outputs = self.complex_question_with_number_solver(question, entity_ids, rels)
+            candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
 
         if self.template_num == 2 or self.template_num == 3:
             candidate_outputs = self.complex_question_with_qualifier_solver(question, entity_ids)
@@ -79,7 +79,7 @@ class QueryGenerator(Component, Serializable):
             candidate_outputs = self.maxmin_two_entities_solver(question, entity_ids)
 
         if self.template_num == 7:
-            candidate_outputs = self.two_hop_solver(question, entity_ids)
+            candidate_outputs = self.two_hop_solver(question, entity_ids, rels_from_template)
 
         print(candidate_outputs)
 
@@ -211,40 +211,48 @@ class QueryGenerator(Component, Serializable):
 
         return candidate_outputs
 
-    def two_hop_solver(self, question, entity_ids):
+    def two_hop_solver(self, question, entity_ids, rels_from_template=None):
+        candidate_outputs = []
         if len(entity_ids) == 1:
-            ex_rels = []
-            for entity in entity_ids[0][:5]:
-                ex_rels += self.wiki_parser("rels", "forw", entity, type_of_rel="direct")
-                ex_rels += self.wiki_parser("rels", "backw", entity, type_of_rel="direct")
+            if rels_from_template is not None:
+                if len(rels_from_template) == 1:
+                    relation = rels_from_template[0][0]
+                    direction = rels_from_template[0][1]
+                    objects = self.wiki_parser("objects", direction, entity[0][0], relation, type_of_rel="direct")
+                    if objects:
+                        candidate_outputs.append((relation, objects[0]))
+                    
+            else:
+                ex_rels = []
+                for entity in entity_ids[0][:5]:
+                    ex_rels += self.wiki_parser("rels", "forw", entity, type_of_rel="direct")
+                    ex_rels += self.wiki_parser("rels", "backw", entity, type_of_rel="direct")
 
-            ex_rels = list(set(ex_rels))
-            scores = self.rel_ranker(question, ex_rels)
-            top_rels = [score[0] for score in scores]
+                ex_rels = list(set(ex_rels))
+                scores = self.rel_ranker(question, ex_rels)
+                top_rels = [score[0] for score in scores]
 
-            ex_rels_2 = []
-            for entity in entity_ids[0][:5]:
+                ex_rels_2 = []
+                for entity in entity_ids[0][:5]:
+                    for rel in top_rels:
+                        objects_mid = self.wiki_parser("objects", "forw", entity, rel, type_of_rel="direct")
+                        objects_mid += self.wiki_parser("objects", "backw", entity, rel, type_of_rel="direct")
+                        if len(objects_mid) < 10:
+                            for obj in objects_mid:
+                                ex_rels_2 += self.wiki_parser("rels", "forw", obj, type_of_rel="direct")
+
+                ex_rels_2 = list(set(ex_rels_2))
+                scores_2 = self.rel_ranker(question, ex_rels_2)
+                top_rels_2 = [score[0] for score in scores_2]
+
                 for rel in top_rels:
-                    objects_mid = self.wiki_parser("objects", "forw", entity, rel, type_of_rel="direct")
-                    if len(objects_mid) < 10:
-                        for obj in objects_mid:
-                            ex_rels_2 += self.wiki_parser("rels", "forw", obj, type_of_rel="direct")
+                    candidate_outputs.append([rel])
 
-            ex_rels_2 = list(set(ex_rels_2))
-            scores_2 = self.rel_ranker(question, ex_rels_2)
-            top_rels_2 = [score[0] for score in scores_2]
-
-            candidate_outputs = []
-
-            for rel in top_rels:
-                
-                candidate_outputs.append([rel])
-
-            for rel_1 in top_rels:
-                for rel_2 in top_rels_2:
-                    candidate_outputs.append([rel_1, rel_2])
+                for rel_1 in top_rels:
+                    for rel_2 in top_rels_2:
+                        candidate_outputs.append([rel_1, rel_2])
             
-            return candidate_outputs
+        return candidate_outputs
 
     def find_relevant_subgraph_cqwn(self, entities_list, rels, num):
         candidate_outputs = []
