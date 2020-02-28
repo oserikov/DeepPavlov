@@ -105,14 +105,57 @@
       "server_utils": "NER"
     },
     "download": [
-
       {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/ner_ontonotes_bert_v1.tar.gz",
-        "subdir": "{MODELS_PATH}"
+        "url": "http://files.deeppavlov.ai/embeddings/reddit_fastText/wordpunct_tok_reddit_comments_2017_11_300.bin",
+        "subdir": "{DOWNLOADS_PATH}/embeddings"
       },
       {
         "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/cased_L-12_H-768_A-12.zip",
         "subdir": "{DOWNLOADS_PATH}/bert_models"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/models/query_prediction.tar.gz",
+        "subdir": "{MODELS_PATH}/classifiers/query_prediction"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/models/ner_lcquad.tar.gz",
+        "subdir": "{MODELS_PATH}/ner_lcquad"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/models/rel_ranking.tar.gz",
+        "subdir": "{MODELS_PATH}/rel_ranking"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/models/rel_ranking_bert.tar.gz",
+        "subdir": "{MODELS_PATH}/rel_ranking_bert"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/inverted_index_eng.pickle",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/wiki_eng_q_to_name.pickle",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/templates_eng.pickle",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/rels_0.txt",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/rels_1.txt",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/wikidata.hdt",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
+      },
+      {
+        "url": "http://files.deeppavlov.ai/kbqa/wikidata/wikidata.hdt.index.v1-1",
+        "subdir": "{DOWNLOADS_PATH}/wikidata_eng"
       }
     ]
   }
