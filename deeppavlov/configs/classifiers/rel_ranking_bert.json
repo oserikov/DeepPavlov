@@ -89,20 +89,16 @@
     ],
     "download": [
       {
-        "url": "http://files.deeppavlov.ai/datasets/paraphraser.zip",
-        "subdir": "{DOWNLOADS_PATH}/paraphraser_data"
+        "url": "http://files.deeppavlov.ai/kbqa/datasets/rel_ranking_bert.tar.gz",
+        "subdir": "{DOWNLOADS_PATH}/rel_ranking_bert"
       },
       {
-        "url": "http://files.deeppavlov.ai/datasets/paraphraser_gold.zip",
-        "subdir": "{DOWNLOADS_PATH}/paraphraser_data"
-      },
-      {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/multi_cased_L-12_H-768_A-12.zip",
+        "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/cased_L-12_H-768_A-12.zip",
         "subdir": "{DOWNLOADS_PATH}/bert_models"
       },
       {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/classifiers/paraphraser_bert_v0.tar.gz",
-        "subdir": "{MODELS_PATH}"
+        "url": "http://files.deeppavlov.ai/kbqa/models/rel_ranking_bert.tar.gz",
+        "subdir": "{MODELS_PATH}/rel_ranking_bert"
       }
     ]
   }
