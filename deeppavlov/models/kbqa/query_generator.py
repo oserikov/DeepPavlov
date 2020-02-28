@@ -44,7 +44,7 @@ class QueryGenerator(Component, Serializable):
     def save(self) -> None:
         pass
 
-    def __call__(self, question_tuple, template_type, entities):
+    def __call__(self, question_tuple, template_type, entities_from_ner):
         question = question_tuple[0]
         self.template_num  = template_type[0]
         
@@ -56,13 +56,15 @@ class QueryGenerator(Component, Serializable):
         print("entity_ids", entity_ids)
         '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
-        entities, rels = self.template_matcher(question)
+        entities_from_template, rels = self.template_matcher(question)
+        entities = entities_from_template if entities_from_template else entities_from_ner
+        #entity_ids = [self.linker(entity)[:10] for entity in entities]
        
         self.template_num = 6
         entity_ids = [["Q11173"], ["Q29006389"]]
 
         if self.template_num == 0 or self.template_num == 1:
-            candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
+            candidate_outputs = self.complex_question_with_number_solver(question, entity_ids, rels)
 
         if self.template_num == 2 or self.template_num == 3:
             candidate_outputs = self.complex_question_with_qualifier_solver(question, entity_ids)
