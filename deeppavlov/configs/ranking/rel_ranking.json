@@ -53,7 +53,7 @@
         "return_probas": true,
         "save_path": "{MODEL_PATH}/model",
         "load_path": "{MODEL_PATH}/model",
-        "learning_rate": 1e-2,
+        "learning_rate": 1e-3,
         "dropout_keep_prob": 0.7,
         "in": ["question_emb", "rel_emb"],
         "in_y": ["y"],
@@ -94,20 +94,16 @@
     ],
     "download": [
       {
-        "url": "http://files.deeppavlov.ai/datasets/paraphraser.zip",
-        "subdir": "{DOWNLOADS_PATH}/paraphraser_data"
+        "url": "http://files.deeppavlov.ai/kbqa/datasets/rel_ranking.tar.gz",
+        "subdir": "{DOWNLOADS_PATH}/rel_ranking"
       },
       {
-        "url": "http://files.deeppavlov.ai/datasets/paraphraser_gold.zip",
-        "subdir": "{DOWNLOADS_PATH}/paraphraser_data"
+        "url": "http://files.deeppavlov.ai/kbqa/models/rel_ranking.tar.gz",
+        "subdir": "{MODELS_PATH}/rel_ranking"
       },
       {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/multi_cased_L-12_H-768_A-12.zip",
-        "subdir": "{DOWNLOADS_PATH}/bert_models"
-      },
-      {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/classifiers/paraphraser_bert_v0.tar.gz",
-        "subdir": "{MODELS_PATH}"
+        "url": "http://files.deeppavlov.ai/embeddings/reddit_fastText/wordpunct_tok_reddit_comments_2017_11_300.bin",
+        "subdir": "{DOWNLOADS_PATH}/embeddings"
       }
     ]
   }
