@@ -32,6 +32,15 @@
         "out": ["template_type"]
       },
       {
+        "class_name": "entity_linker_cq",
+        "id": "linker",
+        "load_path": "{DOWNLOADS_PATH}/wikidata_eng",
+        "inverted_index_filename": "inverted_index_eng.pickle",
+        "id_to_name_file": "wiki_eng_q_to_name.pickle",
+        "use_prefix_tree": false,
+        "debug": false
+      },
+      {
         "config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json",
         "id": "bert_rel_ranker"
       },
@@ -51,6 +60,7 @@
         "class_name": "query_generator",
         "id": "query_g",
         "template_matcher": "#template_m",
+	"linker": "#linker",
         "rel_ranker": "#rel_r_inf",
         "rel_ranker_bert": {"config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json"},
         "wiki_parser": "#wiki_p",
