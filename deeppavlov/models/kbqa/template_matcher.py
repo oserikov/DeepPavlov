@@ -31,7 +31,7 @@ class TemplateMatcher(Component, Serializable):
 
     def load(self) -> None:
         if self._templates_filename is not None:
-            with open(self.load_path.parent / self._templates_filename, 'rb') as t:
+            with open(self.load_path / self._templates_filename, 'rb') as t:
                 self.templates = pickle.load(t)
 
     def save(self) -> None:
