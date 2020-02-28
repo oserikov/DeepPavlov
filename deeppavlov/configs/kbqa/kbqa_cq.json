@@ -29,7 +29,7 @@
         "class_name": "entity_linker_cq",
         "id": "linker",
         "load_path": "{DOWNLOADS_PATH}/wikidata_eng",
-        "inverted_index_filename": "inverted_index.pickle",
+        "inverted_index_filename": "inverted_index_eng.pickle",
         "id_to_name_file": "wiki_eng_q_to_name.pickle",
         "use_prefix_tree": false,
         "debug": false
