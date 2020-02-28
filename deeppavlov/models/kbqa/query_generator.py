@@ -6,6 +6,7 @@ from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 from deeppavlov.core.models.serializable import Serializable
 from typing import Union
+from deeppavlov.models.kbqa.template_matcher import TemplateMatcher
 from deeppavlov.models.kbqa.entity_linking_cq import EntityLinkerCQ
 from deeppavlov.models.kbqa.wiki_parser import WikiParser
 from deeppavlov.models.kbqa.rel_ranking_infer import RelRankerInfer
@@ -14,7 +15,8 @@ dataset = json.loads(fl)
 
 @register('query_generator')
 class QueryGenerator(Component, Serializable):
-    def __init__(self, #linker: EntityLinkerCQ,
+    def __init__(self, template_matcher: TemplateMatcher,
+                       #linker: EntityLinkerCQ,
                        wiki_parser: WikiParser,
                        rel_ranker: RelRankerInfer,
                        load_path: str,
@@ -22,6 +24,7 @@ class QueryGenerator(Component, Serializable):
                        rank_rels_filename_2: str, **kwargs):
      
         super().__init__(save_path=None, load_path=load_path)
+        self.template_matcher = template_matcher
         #self.linker = linker
         self.wiki_parser = wiki_parser
         self.rel_ranker = rel_ranker
@@ -44,6 +47,7 @@ class QueryGenerator(Component, Serializable):
     def __call__(self, question_tuple, template_type, entities):
         question = question_tuple[0]
         self.template_num  = template_type[0]
+        
         #entity_ids = [self.linker(entity)[:10] for entity in entities]
         '''
         print("question", question)
@@ -52,6 +56,7 @@ class QueryGenerator(Component, Serializable):
         print("entity_ids", entity_ids)
         '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
+        entities, rels = self.template_matcher(question)
        
         self.template_num = 6
         entity_ids = [["Q11173"], ["Q29006389"]]
