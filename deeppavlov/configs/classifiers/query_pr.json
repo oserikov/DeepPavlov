@@ -126,16 +126,16 @@
     },
     "download": [
       {
-        "url": "http://files.deeppavlov.ai/datasets/insults_data.tar.gz",
-        "subdir": "{DOWNLOADS_PATH}"
+        "url": "http://files.deeppavlov.ai/kbqa/datasets/query_prediction.tar.gz",
+        "subdir": "{DOWNLOADS_PATH}/query_prediction"
       },
       {
         "url": "http://files.deeppavlov.ai/deeppavlov_data/bert/cased_L-12_H-768_A-12.zip",
         "subdir": "{DOWNLOADS_PATH}/bert_models"
       },
       {
-        "url": "http://files.deeppavlov.ai/deeppavlov_data/classifiers/insults_kaggle_v3.tar.gz",
-        "subdir": "{MODELS_PATH}/classifiers"
+        "url": "http://files.deeppavlov.ai/kbqa/models/query_prediction.tar.gz",
+        "subdir": "{MODELS_PATH}/classifiers/query_prediction"
       }
     ]
   }

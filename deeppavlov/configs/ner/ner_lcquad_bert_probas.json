@@ -59,7 +59,7 @@
         "load_path": "{NER_PATH}/model",
         "in": ["x_subword_tok_ids", "x_subword_mask", "pred_subword_mask"],
         "in_y": ["y_ind"],
-        "out": ["y_pred"]
+        "out": ["y_pred_ind"]
       },
       {
         "ref": "tag_vocab",
@@ -120,7 +120,7 @@
         "subdir": "{DOWNLOADS_PATH}/bert_models"
       },
       {
-        "url": "http://files.deeppavlov.ai/kbqa/models/bert/ner_lcquad.tar.gz",
+        "url": "http://files.deeppavlov.ai/kbqa/models/ner_lcquad.tar.gz",
         "subdir": "{MODELS_PATH}/ner_lcquad"
       }
     ]
