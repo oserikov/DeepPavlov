@@ -53,8 +53,8 @@ class QueryGenerator(Component, Serializable):
         '''
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
        
-        self.template_num = 1
-        entity_ids = [["Q753"]]
+        self.template_num = 6
+        entity_ids = [["Q11173"], ["Q29006389"]]
 
         if self.template_num == 0 or self.template_num == 1:
             candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
@@ -110,6 +110,7 @@ class QueryGenerator(Component, Serializable):
         ex_rels = list(set(ex_rels))
         scores = self.rel_ranker(question, ex_rels)
         top_rels = [score[0] for score in scores]
+        print("top_rels", top_rels)
 
         candidate_outputs = []
 
@@ -138,22 +139,24 @@ class QueryGenerator(Component, Serializable):
         ex_rels = list(set(ex_rels))
         scores = self.rel_ranker(question, ex_rels)
         top_rels = [score[0] for score in scores]
+        print("top_rels", top_rels)
         answers = []
         for entity_id in entity_ids:
             for entity in entity_id[:5]:
                 for rel in top_rels:
                     answers += self.wiki_parser("objects", "forw", entity, top_rels[0], type_of_rel="direct")
                     if len(answers) > 0:
-                        candidate_outputs.append(rel, len(answers))
+                        candidate_outputs.append((rel, len(answers)))
                     else:
                         answers += self.wiki_parser("objects", "backw", entity, top_rels[0], type_of_rel="direct")
-                        candidate_outputs.append(rel, len(answers))
+                        candidate_outputs.append((rel, len(answers)))
 
         return candidate_outputs
     
     def maxmin_one_entity_solver(self, question, entities_list):
         scores = self.rel_ranker(question, self.rank_list_0)
         top_rels = [score[0] for score in scores]
+        print("top_rels", top_rels)
         ascending = self.asc_desc(question)
         candidate_outputs = self.find_relevant_subgraph_maxmin_one(entities_list, top_rels[:5])
         reverse = False
@@ -172,9 +175,13 @@ class QueryGenerator(Component, Serializable):
         ex_rels = list(set(ex_rels))
         scores_1 = self.rel_ranker(question, ex_rels)
         top_rels_1 = [score[0] for score in scores_1]
+        #top_rels_1 = ["P527"]
+        print("top_rels_1", top_rels_1)
 
         scores_2 = self.rel_ranker(question, self.rank_list_1)
         top_rels_2 = [score[0] for score in scores_2]
+        top_rels_2 = ["P2658"]
+        print("top_rels_2", top_rels_2)
 
         candidate_outputs = []
 
@@ -251,8 +258,10 @@ class QueryGenerator(Component, Serializable):
                                     candidate_outputs.append((rel, second_rel, ans))
                     if self.template_num == 1:
                         answer_triplets = self.wiki_parser("triplets", "forw", obj, type_of_rel="qualifier")
+                        print("answer_triplets", answer_triplets)
                         second_rels = self.wiki_parser("rels", "forw", obj, rel,
                                                        type_of_rel="statement", filter_obj=num)
+                        print("second_rels", second_rels)
                         if len(second_rels) > 0 and len(answer_triplets) > 0:
                             for ans in answer_triplets:
                                 candidate_outputs.append((rel, ans[1], ans[2]))
@@ -264,7 +273,7 @@ class QueryGenerator(Component, Serializable):
         
         for ent_comb in ent_combs:
             for rel in rels:
-                objects_1 = self.wiki_parser("objects", "forw", ent_comb[0], rel, type_of_rel="direct")
+                objects_1 = self.wiki_parser("objects", "forw", ent_comb[0], rel, type_of_rel=None)
                 print("objects_1", objects_1)
                 for obj in objects_1:
                     if self.template_num == 2:
@@ -309,13 +318,17 @@ class QueryGenerator(Component, Serializable):
 
         for ent_comb in ent_combs:
             objects_1 = self.wiki_parser("objects", "backw", ent_comb[0], "P31", type_of_rel="direct")
+            #print("objects_1", objects_1)
             for rel_1 in rels_1:
                 objects_2 = self.wiki_parser("objects", "backw", ent_comb[1], rel_1, type_of_rel="direct")
+                #print("objects_2", objects_2)
                 objects_intersect = list(set(objects_1) & set(objects_2))
+                print("objects_intersect", objects_intersect)
                 for rel_2 in rels_2:
                     candidate_answers = []
                     for obj in objects_intersect:
                         objects_3 = self.wiki_parser("objects", "forw", obj, rel_2, type_of_rel="direct", filter_obj="http://www.w3.org/2001/XMLSchema#decimal")
+                        print("objects_3", objects_3)
                         if len(objects_3) > 0:
                             number = re.search(r'["]([^"]*)["]*', objects_3[0]).group(1)
                             candidate_answers.append((obj, float(number)))
@@ -367,6 +380,7 @@ class QueryGenerator(Component, Serializable):
                     break
 
         number = number.replace('1st', '1').replace('2nd', '2').replace('3rd', '3')
+        number = number.strip(".0")
 
         return number
 
