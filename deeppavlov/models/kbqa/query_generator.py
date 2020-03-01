@@ -10,8 +10,7 @@ from deeppavlov.models.kbqa.template_matcher import TemplateMatcher
 from deeppavlov.models.kbqa.entity_linking_cq import EntityLinkerCQ
 from deeppavlov.models.kbqa.wiki_parser import WikiParser
 from deeppavlov.models.kbqa.rel_ranking_infer import RelRankerInfer
-fl = open("/home/evseev/LC-QUAD2.0/test.json").read()
-dataset = json.loads(fl)
+
 
 @register('query_generator')
 class QueryGenerator(Component, Serializable):
@@ -58,6 +57,8 @@ class QueryGenerator(Component, Serializable):
         question = question.replace('"', "'").replace('{', '').replace('}', '').replace('  ', ' ')
         entities_from_template, rels_from_template = self.template_matcher(question)
         entities = entities_from_template if entities_from_template else entities_from_ner
+        candidate_outputs = []
+
         #entity_ids = [self.linker(entity)[:10] for entity in entities]
        
         self.template_num = 6
@@ -122,14 +123,7 @@ class QueryGenerator(Component, Serializable):
         candidate_outputs = []
 
         if len(entity_ids) > 1:
-            ent_combs = []
-            for n, entity_1 in enumerate(entity_ids[0]):
-                for m, entity_2 in enumerate(entity_ids[1]):
-                    ent_combs.append((entity_1, entity_2, (n+m)))
-                    ent_combs.append((entity_2, entity_1, (n+m)))
-
-            ent_combs = sorted(ent_combs, key=lambda x: x[2])
-
+            ent_combs = self.make_entity_combs(entity_ids)
             candidate_outputs = self.find_relevant_subgraph_cqwq(ent_combs, top_rels[:5])
 
         return candidate_outputs
@@ -193,14 +187,7 @@ class QueryGenerator(Component, Serializable):
         candidate_outputs = []
 
         if len(entity_ids) > 1:
-            ent_combs = []
-            for n, entity_1 in enumerate(entity_ids[0]):
-                for m, entity_2 in enumerate(entity_ids[1]):
-                    ent_combs.append((entity_1, entity_2, (n+m)))
-                    ent_combs.append((entity_2, entity_1, (n+m)))
-
-            ent_combs = sorted(ent_combs, key=lambda x: x[2])
-
+            ent_combs = self.make_entity_combs(entity_ids)
             candidate_outputs = self.find_relevant_subgraph_maxmin_two(ent_combs, top_rels_1[:5], top_rels_2[:5])
 
             ascending = self.asc_desc(question)
@@ -215,13 +202,8 @@ class QueryGenerator(Component, Serializable):
         candidate_outputs = []
         if len(entity_ids) == 1:
             if rels_from_template is not None:
-                if len(rels_from_template) == 1:
-                    relation = rels_from_template[0][0]
-                    direction = rels_from_template[0][1]
-                    objects = self.wiki_parser("objects", direction, entity[0][0], relation, type_of_rel="direct")
-                    if objects:
-                        candidate_outputs.append((relation, objects[0]))
-                    
+                candidate_outputs = self.from_template_one_ent(self, entity_ids, rels_from_template)
+
             else:
                 ex_rels = []
                 for entity in entity_ids[0][:5]:
@@ -245,12 +227,44 @@ class QueryGenerator(Component, Serializable):
                 scores_2 = self.rel_ranker(question, ex_rels_2)
                 top_rels_2 = [score[0] for score in scores_2]
 
-                for rel in top_rels:
-                    candidate_outputs.append([rel])
+                for entity in entity_ids[0][:5]:
+                    for rel in top_rels:
+                        objects = self.wiki_parser("rels", "forw", entity, type_of_rel="direct")
+                        objects += self.wiki_parser("rels", "backw", entity, type_of_rel="direct")
+                        candidate_outputs.append([rel, objects[0]])
 
-                for rel_1 in top_rels:
-                    for rel_2 in top_rels_2:
-                        candidate_outputs.append([rel_1, rel_2])
+                for entity in entity_ids[0][:5]:
+                    for rel_1 in top_rels:
+                        objects_mid = self.wiki_parser("rels", "forw", entity, type_of_rel="direct")
+                        objects_mid += self.wiki_parser("rels", "backw", entity, type_of_rel="direct")
+                        if objects_mid and len(objects_mid) < 10:
+                            for obj in objects_mid:
+                                for rel_2 in top_rels_2:
+                                    objects = self.wiki_parser("rels", "forw", obj, type_of_rel="direct")
+                                    candidate_outputs.append([rel_1, rel_2, objects[0]])
+
+        if len(entity_ids) == 2:
+            ent_combs = self.make_entity_combs(entity_ids)
+            if rels_from_template is not None:
+                candidate_outputs = self.from_template_two_ent(self, ent_combs, rels_from_template)
+
+            else:
+                for ent_comb in ent_combs:
+                    ex_rels = []
+                    ex_rels += self.wiki_parser("rels", "forw", ent_comb[1], type_of_rel="direct")
+                    ex_rels += self.wiki_parser("rels", "backw", ent_comb[1], type_of_rel="direct")
+
+                    ex_rels = list(set(ex_rels))
+                    scores = self.rel_ranker(question, ex_rels)
+                    top_rels = [score[0] for score in scores]
+
+                    for rel in top_rels:
+                        objects_1 = self.wiki_parser("rels", "forw", ent_comb[1], rel, type_of_rel="direct")
+                        objects_1 += self.wiki_parser("rels", "backw", ent_comb[1], rel, type_of_rel="direct")
+                        for object_1 in objects_1:
+                            objects_2 = self.wiki_parser("rels", "forw", object_1, "P31", obj=ent_comb[0], type_of_rel="direct")
+                            if objects_2:
+                                candidate_outputs.append((rel, object_1))
             
         return candidate_outputs
 
@@ -353,6 +367,61 @@ class QueryGenerator(Component, Serializable):
 
         return candidate_answers
 
+    def from_template_one_ent(self, entity_ids, rels_from_template):
+        candidate_outputs = []
+        if len(rels_from_template) == 1:
+            relation = rels_from_template[0][0]
+            direction = rels_from_template[0][1]
+            for entity in entity_ids[0]:
+                objects = self.wiki_parser("objects", direction, entity, relation, type_of_rel="direct")
+                if objects:
+                    candidate_outputs.append((relation, objects[0]))
+                    return candidate_outputs
+
+        if len(rels_from_template) == 2:
+            relation_1 = rels_from_template[0][0]
+            direction_1 = rels_from_template[0][1]
+            relation_2 = rels_from_template[1][0]
+            direction_2 = rels_from_template[1][1]
+            for entity in entity_ids[0]:
+                objects_1 = self.wiki_parser("objects", direction_1, entity, relation_1, type_of_rel="direct")
+                for object_1 in objects_1:
+                    objects_2 = self.wiki_parser("objects", direction_2, object_1, relation_2, type_of_rel="direct")
+                    if objects_2:
+                        for object_2 in objects_2:
+                            candidate_outputs.append((relation_1, relation_2, object_2))
+                            return candidate_outputs
+
+        return candidate_outputs
+
+    def from_template_two_ent(self, ent_combs, rels_from_template):
+        candidate_outputs = []
+        if len(rels_from_template) == 1:
+            relation = rels_from_template[0][0]
+            direction = rels_from_template[0][1]
+            for ent_comb in ent_combs:
+                objects_1 = self.wiki_parser("objects", direction, ent_comb[1], relation, type_of_rel="direct")
+                if objects_1:
+                    for object_1 in objects_1:
+                        objects_2 = self.wiki_parser("objects", direction, object_1, "P31", obj=ent_comb[0] type_of_rel="direct")
+                        if objects_2:
+                            candidate_outputs.append((relation, objects_2[0]))
+                            return candidate_outputs
+
+        if len(rels_from_template) == 2:
+            relation_1 = rels_from_template[0][0]
+            direction_1 = rels_from_template[0][1]
+            relation_2 = rels_from_template[1][0]
+            direction_2 = rels_from_template[1][1]
+            for ent_comb in ent_combs:
+                objects_1 = self.wiki_parser("objects", direction_1, ent_comb[0], relation_1, type_of_rel="direct")
+                objects_2 = self.wiki_parser("objects", direction_2, ent_comb[1], relation_2, type_of_rel="direct")
+                objects_intersect = list(set(objects_1)&set(objects_2))
+                if objects_intersect:
+                    return [(relation_1, relation_2, objects_intersect[0])]
+
+        return candidate_outputs
+
     def extract_year(self, question_tokens, question):
         year = ""
         fnd = re.search(r'.*\d/\d/(\d{4}).*', question)
@@ -412,4 +481,14 @@ class QueryGenerator(Component, Serializable):
                 return True
 
         return True
+
+    def make_entity_combs(self, entity_ids):
+        ent_combs = []
+        for n, entity_1 in enumerate(entity_ids[0]):
+            for m, entity_2 in enumerate(entity_ids[1]):
+                ent_combs.append((entity_1, entity_2, (n+m)))
+                ent_combs.append((entity_2, entity_1, (n+m)))
+
+        ent_combs = sorted(ent_combs, key=lambda x: x[2])
+        return ent_combs
 
