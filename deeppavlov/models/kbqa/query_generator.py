@@ -61,8 +61,8 @@ class QueryGenerator(Component, Serializable):
 
         #entity_ids = [self.linker(entity)[:10] for entity in entities]
        
-        self.template_num = 6
-        entity_ids = [["Q11173"], ["Q29006389"]]
+        self.template_num = 7
+        entity_ids = [["Q76"]]
 
         if self.template_num == 0 or self.template_num == 1:
             candidate_outputs = self.complex_question_with_number_solver(question, entity_ids)
@@ -403,7 +403,7 @@ class QueryGenerator(Component, Serializable):
                 objects_1 = self.wiki_parser("objects", direction, ent_comb[1], relation, type_of_rel="direct")
                 if objects_1:
                     for object_1 in objects_1:
-                        objects_2 = self.wiki_parser("objects", direction, object_1, "P31", obj=ent_comb[0] type_of_rel="direct")
+                        objects_2 = self.wiki_parser("objects", direction, object_1, "P31", obj=ent_comb[0], type_of_rel="direct")
                         if objects_2:
                             candidate_outputs.append((relation, objects_2[0]))
                             return candidate_outputs

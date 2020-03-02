@@ -38,13 +38,14 @@ class TemplateMatcher(Component, Serializable):
         raise NotImplementedError
 
     def __call__(self, question: str, *args, **kwargs) -> Tuple[str, str]:
+        question = question.lower()
         entities = []
         relations = []
         min_length = 100
         for template in self.templates:
             template_regexp = template.replace("xxx", "([a-z\d\s\.]+)")
             fnd = re.findall(template_regexp, question)
-            if fnd is not None:
+            if fnd:
                 entities_cand = fnd[0]
                 cur_len = sum([len(entity) for entity in entities_cand])
                 if cur_len < min_length:
