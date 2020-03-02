@@ -5,7 +5,7 @@ from deeppavlov.models.ranking.rel_ranker import RelRanker
 
 
 @register('rel_ranking_bert_infer')
-class RelRankerBertInfer(Component):
+class RelRankerBertInfer(Component, Serializable):
     def __init__(self, load_path: str, rel_q2name_filename: str,
                        ranker, batch_size: int = 32,  **kwargs):
         super().__init__(save_path=None, load_path=load_path)
