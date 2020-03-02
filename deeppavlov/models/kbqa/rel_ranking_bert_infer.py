@@ -66,7 +66,7 @@ class RelRankerBertInfer(Component, Serializable):
             answers_with_scores.append((answer, probas[j]))
 
         answers_with_scores = sorted(answers_with_scores, key=lambda x: x[1], reverse=True)
-        print(len(rels_with_scores))
+        
         return answers_with_scores[0]
     
 
