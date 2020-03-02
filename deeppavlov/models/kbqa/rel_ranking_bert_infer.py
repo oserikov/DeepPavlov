@@ -3,15 +3,18 @@ from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 from deeppavlov.core.models.serializable import Serializable
 from deeppavlov.models.ranking.rel_ranker import RelRanker
+from deeppavlov.models.kbqa.wiki_parser import WikiParser
 
 
 @register('rel_ranking_bert_infer')
 class RelRankerBertInfer(Component, Serializable):
     def __init__(self, load_path: str, rel_q2name_filename: str,
+                       wiki_parser: WikiParser,
                        ranker, batch_size: int = 32,  **kwargs):
         super().__init__(save_path=None, load_path=load_path)
         self.rel_q2name_filename = rel_q2name_filename
         self.ranker = ranker
+        self.wiki_parser = wiki_parser
         self.batch_size = batch_size
         self.load()
 
@@ -66,7 +69,8 @@ class RelRankerBertInfer(Component, Serializable):
             answers_with_scores.append((answer, probas[j]))
 
         answers_with_scores = sorted(answers_with_scores, key=lambda x: x[1], reverse=True)
-        
-        return answers_with_scores[0]
+        answer =self.wiki_parser("objects", "forw", answers_with_scores[0][0], find_label=True)
+
+        return [answer]
     
 
