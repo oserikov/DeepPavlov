@@ -10,10 +10,27 @@ class WikiParser(Component):
         wiki_path = expand_path(wiki_filename)
         self.document = HDTDocument(str(wiki_path))
 
-    def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None):
+    def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None, find_label=False):
         if not entity.startswith("http://www.wikidata.org/"):
             entity = "http://www.wikidata.org/entity/"+entity
-        print("entity", entity)
+        
+        if find_label:
+            if entity.startswith("http://www.wikidata.org/entity/"):
+                labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2000/01/rdf-schema#label", "")
+                for label in labels:
+                    if "@en" in label[2]:
+                        found_label = label[2].strip('@en').strip('"')
+                        return found_label
+
+            elif "http://www.w3.org/2001/XMLSchema#dateTime" in entity:
+                entity = entity.strip("^^<http://www.w3.org/2001/XMLSchema#dateTime").strip('"').strip("T00:00:00Z")
+                return entity
+
+            elif entity.isdigit():
+                return entity
+
+            return "Not Found"            
+
         if rel is not None:
             if type_of_rel is None:
                 rel = "http://www.wikidata.org/prop/{}".format(rel)
@@ -21,10 +38,11 @@ class WikiParser(Component):
                 rel = "http://www.wikidata.org/prop/{}/{}".format(type_of_rel, rel)
         else:
             rel = ""
-
-        print("rel", rel)
         
-        if obj is None:
+        if obj is not None:
+            if not obj.startswith("http://www.wikidata.org/"):
+                obj = "http://www.wikidata.org/entity/"+obj
+        else:
             obj = ""
 
         if direction == "forw":
@@ -51,5 +69,6 @@ class WikiParser(Component):
                 objects = [triplet[2] for triplet in found_triplets]
             if direction == "backw":
                 objects = [triplet[0] for triplet in found_triplets]
+
             return objects
 
