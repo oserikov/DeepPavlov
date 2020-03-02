@@ -6,9 +6,21 @@ import tensorflow as tf
 
 from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.tf_model import LRScheduledTFModel
+from deeppavlov.core.models.component import Component
+from deeppavlov.models.embedders.abstract_embedder import Embedder
 from deeppavlov.core.layers.tf_layers import cudnn_bi_gru, variational_dropout, INITIALIZER
 from deeppavlov.models.squad.utils import CudnnGRU, CudnnCompatibleGRU, dot_attention, softmax_mask
 
+
+@register('two_sentences_emb')
+class TwoSentencesEmbedder(Component):
+    def __init__(self, embedder: Embedder, **kwargs):
+        self.embedder = embedder
+
+    def __call__(self, sentence_tokens_1, sentence_tokens_2):
+        sentence_token_embs_1 = self.embedder(sentence_tokens_1)
+        sentence_token_embs_2 = self.embedder(sentence_tokens_2)
+        return sentence_token_embs_1, sentence_token_embs_2
 
 @register('rel_ranker')
 class RelRanker(LRScheduledTFModel):
@@ -21,6 +33,8 @@ class RelRanker(LRScheduledTFModel):
             kwargs['clip_norm'] = 5.0
 
         super().__init__(**kwargs)
+        print("load_path", kwargs)
+        print("load_path", self.load_path)
 
         self.n_classes = n_classes
         self.dropout_keep_prob = dropout_keep_prob
@@ -32,6 +46,15 @@ class RelRanker(LRScheduledTFModel):
 
         self.question_ph = tf.placeholder(tf.float32, [None, None, 300])
         self.rel_emb_ph = tf.placeholder(tf.float32, [None, None, 300])
+        
+        r_mask_2 = tf.cast(self.rel_emb_ph, tf.bool)
+        r_len_2 = tf.reduce_sum(tf.cast(r_mask_2, tf.int32), axis=2)
+        r_mask = tf.cast(r_len_2, tf.bool)
+        r_len = tf.reduce_sum(tf.cast(r_mask, tf.int32), axis=1)
+        r_len = tf.expand_dims(r_len, axis=1)
+                
+        rel_emb = tf.math.divide(tf.reduce_sum(self.rel_emb_ph, axis=1), tf.cast(r_len, tf.float32))
+
         self.y_ph = tf.placeholder(tf.int32, shape=(None,))
         one_hot_labels = tf.one_hot(self.y_ph, depth=self.n_classes, dtype=tf.float32)
         self.keep_prob_ph = tf.placeholder_with_default(1.0, shape=[], name='keep_prob_ph')
@@ -40,8 +63,6 @@ class RelRanker(LRScheduledTFModel):
         q_len_2 = tf.reduce_sum(tf.cast(q_mask_2, tf.int32), axis=2)
         q_mask = tf.cast(q_len_2, tf.bool)
         q_len = tf.reduce_sum(tf.cast(q_mask, tf.int32), axis=1)
-
-        rel_emb = tf.reduce_mean(self.rel_emb_ph, axis=1)
 
         question_dr = variational_dropout(self.question_ph, keep_prob=self.keep_prob_ph)
         b_size = tf.shape(self.question_ph)[0]

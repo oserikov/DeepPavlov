@@ -32,7 +32,8 @@ class Word2VecEmbedder(Embedder):
 
     def load(self) -> None:
         log.info(f"[loading Word2Vec embeddings from `{self.load_path}`]")
-        self.model = pickle.load(str(self.load_path))
+        with open(str(self.load_path), 'rb') as fl:
+            self.model = pickle.load(fl)
         self.zero_vec = np.zeros(300, dtype=float)
         self.dim = 300
 
