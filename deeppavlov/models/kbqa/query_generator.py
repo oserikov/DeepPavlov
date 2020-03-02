@@ -202,7 +202,7 @@ class QueryGenerator(Component, Serializable):
         candidate_outputs = []
         if len(entity_ids) == 1:
             if rels_from_template is not None:
-                candidate_outputs = self.from_template_one_ent(self, entity_ids, rels_from_template)
+                candidate_outputs = self.from_template_one_ent(entity_ids, rels_from_template)
 
             else:
                 ex_rels = []
@@ -246,7 +246,7 @@ class QueryGenerator(Component, Serializable):
         if len(entity_ids) == 2:
             ent_combs = self.make_entity_combs(entity_ids)
             if rels_from_template is not None:
-                candidate_outputs = self.from_template_two_ent(self, ent_combs, rels_from_template)
+                candidate_outputs = self.from_template_two_ent(ent_combs, rels_from_template)
 
             else:
                 for ent_comb in ent_combs:
