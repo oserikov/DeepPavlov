@@ -32,10 +32,6 @@
         "out": ["template_type"]
       },
       {
-        "config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json",
-        "id": "bert_rel_ranker"
-      },
-      {
         "class_name": "wiki_parser",
         "id": "wiki_p",
         "wiki_filename": "{DOWNLOADS_PATH}/wikidata_eng/wikidata2018_09_11.hdt"
@@ -58,6 +54,15 @@
         "rank_rels_filename_1": "rels_0.txt",
         "rank_rels_filename_2": "rels_1.txt",
         "in": ["x", "template_type", "entities"],
+        "out": ["candidate_answers"]
+      },
+      {
+        "class_name": "rel_ranking_bert_infer",
+        "rel_ranker_bert": {"config_path": "{CONFIGS_PATH}/classifiers/rel_ranking_bert.json"},
+        "batch_size": 32,
+        "load_path": "{DOWNLOADS_PATH}/wikidata_eng",
+        "rel_q2name_filename": "wiki_dict_properties.pickle",
+        "in": ["x", "candidate_answers"],
         "out": ["answers"]
       }
     ],
