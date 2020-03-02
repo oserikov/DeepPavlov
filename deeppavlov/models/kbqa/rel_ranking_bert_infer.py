@@ -50,8 +50,8 @@ class RelRankerBertInfer(Component, Serializable):
         rels_labels_batch = []
         answers_batch = []
         for j in range(len(candidate_answers)%self.batch_size):
-            candidate_rels = candidate_answers[(len(candidate_rels)//self.batch_size*self.batch_size+j)][:-1]
-            candidate_answer = candidate_answers[(len(candidate_rels)//self.batch_size*self.batch_size+j)][-1]
+            candidate_rels = candidate_answers[(len(candidate_answers)//self.batch_size*self.batch_size+j)][:-1]
+            candidate_answer = candidate_answers[(len(candidate_answers)//self.batch_size*self.batch_size+j)][-1]
             candidate_rels = " [SEP] ".join([self.rel_q2name[candidate_rel] \
                                  for candidate_rel in candidate_rels if candidate_rel in self.rel_q2name])
 
@@ -60,7 +60,6 @@ class RelRankerBertInfer(Component, Serializable):
                 rels_labels_batch.append(candidate_rels)
                 answers_batch.append(candidate_answer)
 
-        print("len of rels_labels_batch", len(rels_labels_batch))
         probas = self.ranker(questions_batch, rels_labels_batch)
         probas = [proba[1] for proba in probas]
         for j, answer in enumerate(answers_batch):
