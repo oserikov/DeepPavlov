@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from hdt import HDTDocument
 from deeppavlov.core.commands.utils import expand_path
