@@ -16,8 +16,6 @@ class WikiParser(Component):
             entity = "http://www.wikidata.org/entity/"+entity
         
         if find_label:
-            if re.findall(r'Q[\d]+', entity):
-                entity = entity = "http://www.wikidata.org/entity/"+entity
             if entity.startswith("http://www.wikidata.org/entity/"):
                 labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2000/01/rdf-schema#label", "")
                 for label in labels:
@@ -35,8 +33,6 @@ class WikiParser(Component):
             return "Not Found"
 
         if find_alias:
-            if re.findall(r'Q[\d]+', entity):
-                entity = entity = "http://www.wikidata.org/entity/"+entity
             if entity.startswith("http://www.wikidata.org/entity/"):
                 labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2004/02/skos/core#altLabel", "")
                 for label in labels:
