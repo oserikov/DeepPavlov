@@ -33,12 +33,14 @@ class WikiParser(Component):
             return "Not Found"
 
         if find_alias:
+            aliases = []
             if entity.startswith("http://www.wikidata.org/entity/"):
                 labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2004/02/skos/core#altLabel", "")
                 for label in labels:
                     if label[2].endswith("@en"):
-                        found_label = label[2].strip('@en').strip('"')
-                        return found_label          
+                        aliases.append(label[2].strip('@en').strip('"'))
+
+            return aliases
 
         if rel is not None:
             if type_of_rel is None:
