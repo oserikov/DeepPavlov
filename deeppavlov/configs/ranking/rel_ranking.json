@@ -26,14 +26,6 @@
         "tokenizer": "wordpunct_tokenize"
       },
       {
-        "in": "question_tok",
-        "out": "question_emb",
-        "id": "my_embedder",
-        "class_name": "fasttext",
-        "load_path": "{DOWNLOADS_PATH}/embeddings/wordpunct_tok_reddit_comments_2017_11_300.bin",
-        "pad_zero": true
-      },
-      {
         "in": "text_b",
         "out": "rel_tok",
         "id": "my_tokenizer",
@@ -43,10 +35,16 @@
       {
         "in": "rel_tok",
         "out": "rel_emb",
-        "id": "my_embedder",
+        "id": "ft_embedder",
         "class_name": "fasttext",
         "load_path": "{DOWNLOADS_PATH}/embeddings/wordpunct_tok_reddit_comments_2017_11_300.bin",
         "pad_zero": true
+      },
+      {
+        "in": ["question_tok", "rel_tok"],
+        "out": ["question_emb", "rel_emb"],
+        "class_name": "two_sentences_emb",
+        "embedder": "#ft_embedder"
       },
       {
         "class_name": "rel_ranker",
