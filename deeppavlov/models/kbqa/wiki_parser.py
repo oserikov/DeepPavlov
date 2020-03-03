@@ -10,15 +10,17 @@ class WikiParser(Component):
         wiki_path = expand_path(wiki_filename)
         self.document = HDTDocument(str(wiki_path))
 
-    def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None, find_label=False):
+    def __call__(self, what_return, direction, entity, rel=None, obj=None, type_of_rel=None, filter_obj=None, find_label=False, find_alias=False):
         if not entity.startswith("http://www.wikidata.org/"):
             entity = "http://www.wikidata.org/entity/"+entity
         
         if find_label:
+            if re.findall(r'Q[\d]+', entity):
+                entity = entity = "http://www.wikidata.org/entity/"+entity
             if entity.startswith("http://www.wikidata.org/entity/"):
                 labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2000/01/rdf-schema#label", "")
                 for label in labels:
-                    if "@en" in label[2]:
+                    if label[2].endswith("@en"):
                         found_label = label[2].strip('@en').strip('"')
                         return found_label
 
@@ -29,11 +31,22 @@ class WikiParser(Component):
             elif entity.isdigit():
                 return entity
 
-            return "Not Found"            
+            return "Not Found"
+
+        if find_alias:
+            if re.findall(r'Q[\d]+', entity):
+                entity = entity = "http://www.wikidata.org/entity/"+entity
+            if entity.startswith("http://www.wikidata.org/entity/"):
+                labels, cardinality = self.document.search_triples(entity, "http://www.w3.org/2004/02/skos/core#altLabel", "")
+                for label in labels:
+                    if label[2].endswith("@en"):
+                        found_label = label[2].strip('@en').strip('"')
+                        return found_label          
 
         if rel is not None:
             if type_of_rel is None:
-                rel = "http://www.wikidata.org/prop/{}".format(rel)
+                if not rel.startswith("http:"):
+                    rel = "http://www.wikidata.org/prop/{}".format(rel)
             else:
                 rel = "http://www.wikidata.org/prop/{}/{}".format(type_of_rel, rel)
         else:
