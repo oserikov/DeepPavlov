@@ -1,9 +1,15 @@
 import numpy as np
 
+from deeppavlov.models.go_bot.tracker import DialogueStateTracker
+
 
 class FeaturesEngineer:
     @staticmethod
-    def calc_context_features(current_db_result, db_result, dst_state):
+    def calc_context_features(tracker: DialogueStateTracker):
+        current_db_result = tracker.current_db_result
+        db_result = tracker.db_result
+        dst_state = tracker.get_state()
+
         result_matches_state = 0.
         if current_db_result is not None:
             matching_items = dst_state.items()
