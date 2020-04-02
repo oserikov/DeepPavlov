@@ -20,6 +20,9 @@ import numpy as np
 
 from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
+from deeppavlov.models.go_bot.nlg_mechanism import NLGHandler
+from deeppavlov.models.go_bot.nlu_mechanism import NLUHandler
+from deeppavlov.models.go_bot.policy import PolicyNetworkParams
 
 log = getLogger(__name__)
 
@@ -155,25 +158,30 @@ class FeaturizedTracker(Tracker):
 class DialogueStateTracker(FeaturizedTracker):
     def __init__(self, slot_names, n_actions: int, hidden_size: int, database: Component = None) -> None:
         super().__init__(slot_names)
-        self.db_result = None
-        self.current_db_result = None
-        self.database = database
-
-        self.n_actions = n_actions
         self.hidden_size = hidden_size
-        self.prev_action = np.zeros(n_actions, dtype=np.float32)
+        self.database = database
+        self.n_actions = n_actions
 
-        self.network_state = (
-            np.zeros([1, hidden_size], dtype=np.float32),
-            np.zeros([1, hidden_size], dtype=np.float32)
-        )
+        self.reset_state()
+
+    @staticmethod
+    def from_gobot_params(parent_tracker: FeaturizedTracker,
+                          nlg_handler: NLGHandler,
+                          policy_network_params: PolicyNetworkParams,
+                          database: Component):
+        return DialogueStateTracker(parent_tracker.slot_names,
+                                    nlg_handler.num_of_known_actions(),
+                                    policy_network_params.hidden_size,
+                                    database)
 
     def reset_state(self):
         super().reset_state()
         self.db_result = None
         self.current_db_result = None
         self.prev_action = np.zeros(self.n_actions, dtype=np.float32)
+        self._reset_network_state()
 
+    def _reset_network_state(self):
         self.network_state = (
             np.zeros([1, self.hidden_size], dtype=np.float32),
             np.zeros([1, self.hidden_size], dtype=np.float32)
@@ -227,10 +235,18 @@ class DialogueStateTracker(FeaturizedTracker):
         if self.current_db_result is not None:
             self.db_result = self.current_db_result
 
+    def fill_current_state_with_db_results(self) -> dict:
+        slots = self.get_state()
+        if self.db_result:
+            for k, v in self.db_result.items():
+                slots[k] = str(v)
+        return slots
 
-class MultipleUserStateTracker(object):
-    def __init__(self):
+
+class MultipleUserStateTrackersPool(object):
+    def __init__(self, base_tracker: DialogueStateTracker):
         self._ids_to_trackers = {}
+        self.base_tracker = base_tracker
 
     def check_new_user(self, user_id: int) -> bool:
         return user_id in self._ids_to_trackers
@@ -245,8 +261,22 @@ class MultipleUserStateTracker(object):
         tracker.current_db_result = None
         return tracker
 
+    def new_tracker(self):
+        tracker = DialogueStateTracker(self.base_tracker.slot_names, self.base_tracker.n_actions,
+                                       self.base_tracker.hidden_size, self.base_tracker.database)
+        return tracker
+
+    def get_or_init_tracker(self, user_id: int):
+        if not self.check_new_user(user_id):
+            self.init_new_tracker(user_id, self.base_tracker)
+
+        return self.get_user_tracker(user_id)
+
+
+
     def init_new_tracker(self, user_id: int, tracker_entity: DialogueStateTracker) -> None:
         # TODO: implement a better way to init a tracker
+        # todo deprecated. The whole class should follow AbstractFactory or Pool pattern?
         tracker = DialogueStateTracker(
             tracker_entity.slot_names,
             tracker_entity.n_actions,
@@ -264,4 +294,3 @@ class MultipleUserStateTracker(object):
             self._ids_to_trackers[user_id].reset_state()
         else:
             self._ids_to_trackers.clear()
-

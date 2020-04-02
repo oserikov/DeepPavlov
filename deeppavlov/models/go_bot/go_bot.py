@@ -21,13 +21,17 @@ from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 from deeppavlov.core.models.nn_model import NNModel
 from deeppavlov.models.go_bot.data_handler import DataHandler
-from deeppavlov.models.go_bot.features_handling_objects import UtteranceFeatures, DialogueFeatures, BatchDialoguesFeatures
-from deeppavlov.models.go_bot.nlu_handler import NLUHandler
-from deeppavlov.models.go_bot.nn_stuff_handler import NNStuffHandler
-from deeppavlov.models.go_bot.tracker import FeaturizedTracker, DialogueStateTracker, MultipleUserStateTracker
+from deeppavlov.models.go_bot.dto.dataset_features import UtteranceDataEntry, DialogueDataEntry, \
+    BatchDialoguesDataset, UtteranceFeatures
+from deeppavlov.models.go_bot.features_engineerer import FeaturesParams
+from deeppavlov.models.go_bot.nlg_mechanism import NLGHandler
+from deeppavlov.models.go_bot.nlu_mechanism import NLUHandler
+from deeppavlov.models.go_bot.policy import PolicyNetwork, PolicyNetworkParams
+from deeppavlov.models.go_bot.tracker import FeaturizedTracker, DialogueStateTracker, MultipleUserStateTrackersPool
 from pathlib import Path
 
 log = getLogger(__name__)
+
 
 @register("go_bot")
 class GoalOrientedBot(NNModel):
@@ -99,6 +103,9 @@ class GoalOrientedBot(NNModel):
         debug: whether to display debug output.
     """
 
+    DEFAULT_USER_ID = 1
+    POLICY_DIR_NAME = "policy"
+
     def __init__(self,
                  tokenizer: Component,
                  tracker: FeaturizedTracker,
@@ -120,43 +127,37 @@ class GoalOrientedBot(NNModel):
                  intent_classifier: Component = None,
                  database: Component = None,
                  api_call_action: str = None,
-                 use_action_mask: bool = False,  # todo not supported actually
+                 use_action_mask: bool = False,
                  debug: bool = False,
                  **kwargs) -> None:
-
+        self.use_action_mask = use_action_mask  # todo not supported actually
         super().__init__(save_path=save_path, load_path=load_path, **kwargs)
-
-        # todo tracker params dto; data_config_dto; method_name
 
         self.debug = debug
 
+        policy_network_params = PolicyNetworkParams(hidden_size, action_size, dropout_rate, l2_reg_coef,
+                                                    dense_size, attention_mechanism, network_parameters)
+
         self.nlu_handler = NLUHandler(tokenizer, slot_filler, intent_classifier)
-        self.data_handler = DataHandler(debug, template_path, template_type, word_vocab, bow_embedder, api_call_action, embedder)
+        self.nlg_handler = NLGHandler(template_path, template_type, api_call_action)
+        self.data_handler = DataHandler(debug, word_vocab, bow_embedder, embedder)
 
-        n_actions = len(self.data_handler.templates)
+        self.dialogue_state_tracker = DialogueStateTracker.from_gobot_params(tracker, self.nlg_handler, policy_network_params, database)
+        self.multiple_user_state_tracker = MultipleUserStateTrackersPool(base_tracker=self.dialogue_state_tracker)
 
-        self.dialogue_state_tracker = DialogueStateTracker(tracker.slot_names, n_actions, hidden_size, database)
-        self.multiple_user_state_tracker = MultipleUserStateTracker()
+        tokens_dims = self.data_handler.get_dims()
+        features_params = FeaturesParams.from_configured(self.nlg_handler, self.nlu_handler, self.dialogue_state_tracker)
+        policy_save_path = Path(save_path, self.POLICY_DIR_NAME)
+        policy_load_path = Path(load_path, self.POLICY_DIR_NAME)
 
-        embedder_dim = self.data_handler.embedder.dim if self.data_handler.embedder else None
-        use_bow_embedder = self.data_handler.use_bow_encoder()
-        word_vocab_size = self.data_handler.word_vocab_size()
-        nn_stuff_save_path = Path(save_path, NNStuffHandler.SAVE_LOAD_SUBDIR_NAME)
-        nn_stuff_load_path = Path(load_path, NNStuffHandler.SAVE_LOAD_SUBDIR_NAME)
+        self.policy = PolicyNetwork(policy_network_params, tokens_dims, features_params,
+                                    policy_load_path, policy_save_path, **kwargs)
 
-        self.policy = NNStuffHandler(
-            hidden_size, action_size, dropout_rate, l2_reg_coef, dense_size, attention_mechanism,
-            network_parameters, embedder_dim, n_actions,
-            self.intent_classifier, self.intents, tracker.num_features,
-            use_bow_embedder, word_vocab_size,
-            load_path=nn_stuff_load_path, save_path=nn_stuff_save_path,
-            **kwargs)
+        self.reset()
 
-        self.reset()  # tracker
-
-    def calc_dialogues_batches_training_data(self, x: List[dict], y: List[dict]) -> BatchDialoguesFeatures:
+    def calc_dialogues_batches_training_data(self, x: List[dict], y: List[dict]) -> BatchDialoguesDataset:
         max_num_utter = max(len(d_contexts) for d_contexts in x)  # for padding
-        batch_features = BatchDialoguesFeatures(max_num_utter)
+        batch_features = BatchDialoguesDataset(max_num_utter)
 
         for d_contexts, d_responses in zip(x, y):
             dialogue_features = self.calc_dialogue_training_data(d_contexts, d_responses)
@@ -164,41 +165,40 @@ class GoalOrientedBot(NNModel):
 
         return batch_features
 
-    def calc_dialogue_training_data(self, d_contexts, d_responses) -> DialogueFeatures:
-        dialogue_features = DialogueFeatures()
+    def calc_dialogue_training_data(self, d_contexts, d_responses) -> DialogueDataEntry:
+        dialogue_features = DialogueDataEntry()
         self.dialogue_state_tracker.reset_state()
         for context, response in zip(d_contexts, d_responses):
             utterance_features = self.process_utterance(context, response)
 
             dialogue_features.append(utterance_features)
 
-            self.dialogue_state_tracker.update_previous_action(utterance_features.action_id)
+            self.dialogue_state_tracker.update_previous_action(utterance_features.target.action_id)
 
             if self.debug:
                 log.debug(f"True response = '{response['text']}'.")
-                if utterance_features.action_mask[utterance_features.action_id] != 1.:
+                if utterance_features.features.action_mask[utterance_features.target.action_id] != 1.:
                     log.warning("True action forbidden by action mask.")
         return dialogue_features
 
-    def process_utterance(self, context, response) -> UtteranceFeatures:
+    def process_utterance(self, context, response) -> UtteranceDataEntry:
         text = context['text']
 
         self.dialogue_state_tracker.update_ground_truth_db_result_from_context(context)
         attn_key, features, tokens_embeddings_padded, action_mask = self.method_name(text, self.dialogue_state_tracker)
 
-        action_id = self.data_handler.encode_response(response['act'])
+        action_id = self.nlg_handler.encode_response(response['act'])
 
-        utterance_features = UtteranceFeatures(action_id=action_id,
-                                               action_mask=action_mask,
-                                               attn_key=attn_key,
-                                               features=features,
-                                               tokens_embeddings_padded=tokens_embeddings_padded)
+        utterance_features = UtteranceDataEntry(action_id=action_id,
+                                                action_mask=action_mask,
+                                                attn_key=attn_key,
+                                                features=features,
+                                                tokens_embeddings_padded=tokens_embeddings_padded)
         return utterance_features
 
-    def method_name(self, text, tracker, keep_tracker_state=False):
+    def method_name(self, text, tracker, keep_tracker_state=False) -> UtteranceFeatures:
         context_slots, intent_features, tokens = self.nlu(text)
 
-        # region text2vec
         tokens_bow_encoded = []
         if self.data_handler.use_bow_encoder():
             tokens_bow_encoded = self.data_handler.bow_encode_tokens(tokens)
@@ -210,7 +210,6 @@ class GoalOrientedBot(NNModel):
             tokens_embeddings_padded = self.data_handler.calc_tokens_embeddings(attn_window_size, tokens)
         else:
             tokens_aggregated_embedding = self.data_handler.calc_tokens_embedding(tokens)
-        # endregion text2vec
 
         if context_slots and not keep_tracker_state:
             tracker.update_state(context_slots)
@@ -224,80 +223,94 @@ class GoalOrientedBot(NNModel):
 
         attn_key = self.calc_attn_key(self.policy.get_attn_hyperparams(), intent_features, tracker_prev_action)
 
-        concat_feats = np.hstack((tokens_bow_encoded, tokens_aggregated_embedding, intent_features, state_features, context_features, tracker_prev_action))
+        concat_feats = np.hstack((tokens_bow_encoded, tokens_aggregated_embedding, intent_features, state_features,
+                                  context_features, tracker_prev_action))
         # endregion features engineering
 
-        action_mask = tracker.calc_action_mask(self.data_handler.api_call_id)
+        action_mask = tracker.calc_action_mask(self.nlg_handler.api_call_id)
 
-        return attn_key, concat_feats, tokens_embeddings_padded, action_mask
+        return UtteranceFeatures(action_mask, attn_key, tokens_embeddings_padded, concat_feats)
 
     # todo как инфер понимает из конфига что ему нужно. лёша что-то говорил про дерево
     def _infer(self, text: str, tracker: DialogueStateTracker, keep_tracker_state=False) -> Sequence:
-        attn_key, concat_feats, tokens_embeddings_padded, action_mask = self.method_name(text, tracker, keep_tracker_state)
+        attn_key, concat_feats, tokens_embeddings_padded, action_mask = self.method_name(text, tracker,
+                                                                                         keep_tracker_state)
 
-        utterance_features = UtteranceFeatures(action_id=None,
-                                               action_mask=action_mask,
-                                               attn_key=attn_key,
-                                               features=concat_feats,
-                                               tokens_embeddings_padded=tokens_embeddings_padded)
+        utterance_data_entry = UtteranceDataEntry(action_id=None,
+                                                  action_mask=action_mask,
+                                                  attn_key=attn_key,
+                                                  features=concat_feats,
+                                                  tokens_embeddings_padded=tokens_embeddings_padded)
+
+        dialogue_data_entry = DialogueDataEntry()
+        dialogue_data_entry.append(utterance_data_entry)
+        batch_dialogues_dataset = BatchDialoguesDataset(1)
+        batch_dialogues_dataset.append(dialogue_data_entry)
 
         tracker_net_state_c, tracker_net_state_h = tracker.network_state[0], tracker.network_state[1]
-        probs, state_c, state_h = self.policy._network_call(utterance_features, tracker_net_state_c, tracker_net_state_h, prob=True)  # todo чо за warning кидает ide, почему
+        probs, state_c, state_h = self.policy.__call__(batch_dialogues_dataset.features,
+                                                       tracker_net_state_c,
+                                                       tracker_net_state_h,
+                                                       prob=True)  # todo чо за warning кидает ide, почему
 
         return probs, np.argmax(probs), (state_c, state_h)
 
-    def __call__(self, batch: Union[List[dict], List[str]], user_ids: Optional[List] = None) -> Union[List[str],
+    def __call__(self, batch: Union[List[List[dict]], List[str]], user_ids: Optional[List] = None) -> Union[List[str],
                                                                                                       List[List[str]]]:
+        # todo refactor
         # batch is a list of utterances
         if isinstance(batch[0], str):
             res = []
             if not user_ids:
-                user_ids = ['finn'] * len(batch)
+                user_ids = [self.DEFAULT_USER_ID] * len(batch)
             for user_id, x in zip(user_ids, batch):
-                if not self.multiple_user_state_tracker.check_new_user(user_id):
-                    self.multiple_user_state_tracker.init_new_tracker(user_id, self.dialogue_state_tracker)
+                x: str
 
-                tracker = self.multiple_user_state_tracker.get_user_tracker(user_id)
+                tracker = self.multiple_user_state_tracker.get_or_init_tracker(user_id)
 
-                _, predicted_act_id, tracker.network_state = self._infer(x, tracker=tracker)
+                _, predicted_act_id, network_state = self._infer(x, tracker)
                 tracker.update_previous_action(predicted_act_id)
+                tracker.network_state = network_state
 
-                if predicted_act_id == self.data_handler.api_call_id:
+                if predicted_act_id == self.nlg_handler.api_call_id:
                     tracker.make_api_call()
-                    _, predicted_act_id, tracker.network_state = self._infer(x, tracker=tracker, keep_tracker_state=True)
+                    _, predicted_act_id, network_state = self._infer(x, tracker, keep_tracker_state=True)
                     tracker.update_previous_action(predicted_act_id)
+                    tracker.network_state = network_state
 
-                # region nlg
-                resp = self.data_handler.decode_response(predicted_act_id, tracker)
-                # endregion nlg
+                tracker_slotfilled_state = tracker.fill_current_state_with_db_results()
+                resp = self.nlg_handler.generate_slotfilled_text_for_action(predicted_act_id, tracker_slotfilled_state)
+
                 res.append(resp)
-            return res
-        # batch is a list of dialogs, user_ids ignored
-        # todo: что значит коммент выше, почему узер идс игноред
-        return [self._infer_dialog(x) for x in batch]
+        else:
+            # batch is a list of dialogs, user_ids ignored
+            res = [self._infer_dialog(x) for x in batch]
+        return res
 
     def _infer_dialog(self, contexts: List[dict]) -> List[str]:
         res = []
         self.dialogue_state_tracker.reset_state()
         for context in contexts:
             if context.get('prev_resp_act') is not None:
-                previous_act_id = self.data_handler.encode_response(context['prev_resp_act'])
-                self.dialogue_state_tracker.update_previous_action(previous_act_id)  # teacher-forcing
+                previous_act_id = self.nlg_handler.encode_response(context['prev_resp_act'])
+                self.dialogue_state_tracker.update_previous_action(previous_act_id)
 
             self.dialogue_state_tracker.update_ground_truth_db_result_from_context(context)
 
-            text = context['text']
-            _, predicted_act_id, self.dialogue_state_tracker.network_state = self._infer(text, tracker=self.dialogue_state_tracker)
+            _, predicted_act_id, network_state = self._infer(context['text'], self.dialogue_state_tracker)
             self.dialogue_state_tracker.update_previous_action(predicted_act_id)
+            self.dialogue_state_tracker.network_state = network_state
 
-            resp = self.data_handler.decode_response(predicted_act_id, self.dialogue_state_tracker)
+            tracker_slotfilled_state = self.dialogue_state_tracker.fill_current_state_with_db_results()
+            resp = self.nlg_handler.generate_slotfilled_text_for_action(predicted_act_id, tracker_slotfilled_state)
 
             res.append(resp)
         return res
 
     def train_on_batch(self, x: List[dict], y: List[dict]) -> dict:
-        batch_features = self.calc_dialogues_batches_training_data(x, y)
-        return self.policy._network_train_on_batch(batch_features)
+        batch_features_dataset = self.calc_dialogues_batches_training_data(x, y)
+        batch_features, batch_targets = batch_features_dataset.features, batch_features_dataset.targets
+        return self.policy.train_on_batch(batch_features, batch_targets)
 
     def reset(self, user_id: Union[None, str, int] = None) -> None:
         # todo а чо, у нас всё что можно закешить лежит в мультиюхертрекере?

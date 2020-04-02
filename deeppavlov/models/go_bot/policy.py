@@ -1,6 +1,5 @@
-import collections
 import json
-from typing import Tuple, List, Optional, Sequence
+from typing import Tuple, Optional, Sequence
 from logging import getLogger
 
 import numpy as np
@@ -8,73 +7,22 @@ import tensorflow as tf
 
 from deeppavlov.core.common.errors import ConfigError
 from deeppavlov.core.layers import tf_attention_mechanisms as am, tf_layers
+# noinspection PyUnresolvedReferences
 from tensorflow.contrib.layers import xavier_initializer as xav
 
 from deeppavlov.core.models.tf_model import LRScheduledTFModel
-from deeppavlov.models.go_bot.features_handling_objects import BatchDialoguesFeatures, UtteranceFeatures, \
-    DialogueFeatures
-from deeppavlov.models.go_bot.utils import GobotAttnHyperParams, GobotAttnParams
 
+from deeppavlov.models.go_bot.data_handler import TokensVectorRepresentationParams
+from deeppavlov.models.go_bot.dto.dataset_features import BatchDialoguesFeatures, BatchDialoguesTargets
+from deeppavlov.models.go_bot.attention import GobotAttnMechanism, GobotAttnParams
 
-def calc_obs_size(default_tracker_num_features,
-                  n_actions,
-                  use_bow_embedder, word_vocab_size, embedder_dim,
-                  intent_classifier, intents):
-    obs_size = 6 + default_tracker_num_features + n_actions
-    if use_bow_embedder:
-        obs_size += word_vocab_size
-    if embedder_dim:
-        obs_size += embedder_dim
-    if callable(intent_classifier):
-        obs_size += len(intents)
-    # log.info(f"Calculated input size for `GoalOrientedBotNetwork` is {obs_size}")
-    return obs_size
-
-
-def configure_attn(attn,
-                   embedder_dim,
-                   n_actions,
-                   intent_classifier,
-                   intents):
-    curr_attn_token_size = attn.get('token_size'),
-    curr_attn_action_as_key = attn.get('action_as_key'),
-    curr_attn_intent_as_key = attn.get('intent_as_key'),
-    curr_attn_key_size = attn.get('key_size')
-
-    token_size = curr_attn_token_size or embedder_dim
-    action_as_key = curr_attn_action_as_key or False
-    intent_as_key = curr_attn_intent_as_key or False
-
-    possible_key_size = 0
-    if action_as_key:
-        possible_key_size += n_actions
-    if intent_as_key and callable(intent_classifier):
-        possible_key_size += len(intents)
-    possible_key_size = possible_key_size or 1
-    key_size = curr_attn_key_size or possible_key_size
-
-    gobot_attn_params = GobotAttnParams(max_num_tokens=attn.get("max_num_tokens"),
-                                        hidden_size=attn.get("hidden_size"),
-                                        token_size=token_size,
-                                        key_size=key_size,
-                                        type_=attn.get("type"),
-                                        projected_align=attn.get("projected_align"),
-                                        depth=attn.get("depth"),
-                                        action_as_key=action_as_key,
-                                        intent_as_key=intent_as_key)
-
-    return gobot_attn_params
-
+# todo
+from deeppavlov.models.go_bot.features_engineerer import FeaturesParams
 
 log = getLogger(__name__)
 
+class PolicyNetworkParams:
 
-class NNStuffHandler(LRScheduledTFModel):
-    SAVE_LOAD_SUBDIR_NAME = "nn_stuff"
-
-    GRAPH_PARAMS = ["hidden_size", "action_size", "dense_size", "attention_mechanism"]
-    SERIALIZABLE_FIELDS = ["hidden_size", "action_size", "dense_size", "dropout_rate", "l2_reg_coef",
-                           "attention_mechanism"]
     UNSUPPORTED = ["obs_size"]
     DEPRECATED = ["end_learning_rate", "decay_steps", "decay_power"]
 
@@ -85,43 +33,75 @@ class NNStuffHandler(LRScheduledTFModel):
                  l2_reg_coef,
                  dense_size,
                  attention_mechanism,
-                 network_parameters,
-                 embedder_dim,
-                 n_actions,
-                 intent_classifier,
-                 intents,
-                 default_tracker_num_features,
-                 use_bow_embedder,
-                 word_vocab_size,
+                 network_parameters):
+        self.hidden_size = hidden_size
+        self.action_size = action_size
+        self.dropout_rate = dropout_rate
+        self.l2_reg_coef = l2_reg_coef
+        self.dense_size = dense_size
+        self.attention_mechanism = attention_mechanism
+        self.network_parameters = network_parameters or {}
+
+        self.log_deprecated_params(self.network_parameters.keys())
+
+    def get_hidden_size(self):
+        return self.network_parameters.get("hidden_size", self.hidden_size)
+
+    def get_action_size(self):
+        return self.network_parameters.get("action_size", self.action_size)
+
+    def get_dropout_rate(self):
+        return self.network_parameters.get("dropout_rate", self.dropout_rate)
+
+    def get_l2_reg_coef(self):
+        return self.network_parameters.get("l2_reg_coef", self.l2_reg_coef)
+
+    def get_dense_size(self):
+        return self.network_parameters.get("dense_size", self.dense_size) or self.hidden_size
+
+    def get_learning_rate(self):
+        return self.network_parameters.get("learning_rate", None)
+
+    def get_attn_params(self):
+        return self.network_parameters.get('attention_mechanism', self.attention_mechanism)
+
+    def log_deprecated_params(self, network_parameters):
+        if any(p in network_parameters for p in self.DEPRECATED):
+            log.warning(f"parameters {self.DEPRECATED} are deprecated,"
+                        f" for learning rate schedule documentation see"
+                        f" deeppavlov.core.models.lr_scheduled_tf_model"
+                        f" or read a github tutorial on super convergence.")
+
+class PolicyNetwork(LRScheduledTFModel):
+
+    GRAPH_PARAMS = ["hidden_size", "action_size", "dense_size", "attention_mechanism"]
+    SERIALIZABLE_FIELDS = ["hidden_size", "action_size", "dense_size", "dropout_rate", "l2_reg_coef",
+                           "attention_mechanism"]
+
+    def __init__(self, network_params_passed: PolicyNetworkParams,
+                 tokens_dims: TokensVectorRepresentationParams,
+                 features_params: FeaturesParams,
                  load_path,
                  save_path,
                  **kwargs):
 
-        if network_parameters is None:
-            network_parameters = {}
-
-        if 'learning_rate' in network_parameters:
-            kwargs['learning_rate'] = network_parameters.pop('learning_rate')  # todo почему это так, @лёша?
+        if network_params_passed.get_learning_rate():
+            kwargs['learning_rate'] = network_params_passed.get_learning_rate()  # todo :(
 
         super().__init__(load_path=load_path, save_path=save_path, **kwargs)
 
-        self.log_deprecated_params(network_parameters.keys())
+        self.hidden_size = network_params_passed.get_hidden_size()
+        self.action_size = network_params_passed.get_action_size() or features_params.num_actions  # todo :(
+        self.dropout_rate = network_params_passed.get_dropout_rate()
+        self.l2_reg_coef = network_params_passed.get_l2_reg_coef()
+        self.dense_size = network_params_passed.get_dense_size()
 
-        self.hidden_size = network_parameters.get("hidden_size", hidden_size)
-        self.action_size = network_parameters.get("action_size", action_size) or n_actions
-        self.dropout_rate = network_parameters.get("dropout_rate", dropout_rate)
-        self.l2_reg_coef = network_parameters.get("l2_reg_coef", l2_reg_coef)
-        self.dense_size = network_parameters.get("dense_size", dense_size) or hidden_size
+        self.input_size = self.calc_input_size(tokens_dims, features_params)
 
-        self.obs_size = calc_obs_size(default_tracker_num_features, n_actions,
-                                      use_bow_embedder, word_vocab_size, embedder_dim,
-                                      intent_classifier, intents)
-
-        attn = network_parameters.get('attention_mechanism', attention_mechanism)
-        if attn:
-            self.attention_mechanism = configure_attn(attn, embedder_dim=embedder_dim, n_actions=n_actions,
-                                                      intent_classifier=intent_classifier, intents=intents)
-            self.obs_size -= self.attention_mechanism.token_size
+        attn_params_passed = network_params_passed.get_attn_params()
+        if attn_params_passed:
+            self.attention_mechanism = GobotAttnParams.configure_attn(attn_params_passed, tokens_dims, features_params)
+            self.input_size -= self.attention_mechanism.token_size
         else:
             self.attention_mechanism = None
 
@@ -136,12 +116,16 @@ class NNStuffHandler(LRScheduledTFModel):
         else:
             log.info(f"[initializing `{self.__class__.__name__}` from scratch]")
 
-    def log_deprecated_params(self, network_parameters):
-        if any(p in network_parameters for p in self.DEPRECATED):
-            log.warning(f"parameters {self.DEPRECATED} are deprecated,"
-                        f" for learning rate schedule documentation see"
-                        f" deeppavlov.core.models.lr_scheduled_tf_model"
-                        f" or read a github tutorial on super convergence.")
+    @staticmethod
+    def calc_input_size(tokens_dims: TokensVectorRepresentationParams, features_params: FeaturesParams):
+        input_size = 6 + features_params.num_tracker_features + features_params.num_actions
+        if tokens_dims.bow_dim:
+            input_size += tokens_dims.bow_dim
+        if tokens_dims.embedding_dim:
+            input_size += tokens_dims.embedding_dim
+        if features_params.num_intents:
+            input_size += features_params.num_intents
+        return input_size
 
     def _build_graph(self) -> None:
         self._add_placeholders()
@@ -171,7 +155,7 @@ class NNStuffHandler(LRScheduledTFModel):
     def _add_placeholders(self) -> None:
         self._dropout_keep_prob = tf.placeholder_with_default(1.0, shape=[], name='dropout_prob')
 
-        self._features = tf.placeholder(tf.float32, [None, None, self.obs_size], name='features')
+        self._features = tf.placeholder(tf.float32, [None, None, self.input_size], name='features')
 
         self._action = tf.placeholder(tf.int32, [None, None], name='ground_truth_action')
 
@@ -255,23 +239,15 @@ class NNStuffHandler(LRScheduledTFModel):
     def train_checkpoint_exists(self):
         return tf.train.checkpoint_exists(str(self.load_path.resolve()))
 
-    def get_attn_hyperparams(self) -> Optional[GobotAttnHyperParams]:
+    def get_attn_hyperparams(self) -> Optional[GobotAttnMechanism]:
         attn_hyperparams = None
         if self.attention_mechanism:
-            attn_hyperparams = GobotAttnHyperParams(self.attention_mechanism)
+            attn_hyperparams = GobotAttnMechanism(self.attention_mechanism)
         return attn_hyperparams
 
-    def __call__(self, *args, **kwargs):
-        # todo _network_call
-        pass
-
-    def _network_call(self, utterance_features: UtteranceFeatures,
-                      states_c: np.ndarray, states_h: np.ndarray, prob: bool = False) -> Sequence[np.ndarray]:
-
-        dialogue_features = DialogueFeatures()
-        dialogue_features.append(utterance_features)
-        batch_dialogues_features = BatchDialoguesFeatures(1)
-        batch_dialogues_features.append(dialogue_features)
+    def __call__(self, batch_dialogues_features: BatchDialoguesFeatures,
+                 states_c: np.ndarray, states_h: np.ndarray, prob: bool = False,
+                 *args, **kwargs) -> Sequence[np.ndarray]:
 
         states_c = [[states_c]]  # list of list aka batch of dialogues
         states_h = [[states_h]]  # list of list aka batch of dialogues
@@ -293,23 +269,21 @@ class NNStuffHandler(LRScheduledTFModel):
             return probs, state[0], state[1]
         return prediction, state[0], state[1]
 
-    def train_on_batch(self, x: list, y: list):
-        # todo
-        pass
-
-    def _network_train_on_batch(self, batch_features: BatchDialoguesFeatures) -> dict:
+    def train_on_batch(self,
+                       batch_dialogues_features: BatchDialoguesFeatures,
+                       batch_dialogues_targets: BatchDialoguesTargets) -> dict:
 
         feed_dict = {
             self._dropout_keep_prob: 1.,
-            self._utterance_mask: batch_features.b_padded_dialogue_length_mask,
-            self._features: batch_features.b_featuress,
-            self._action: batch_features.b_action_ids,
-            self._action_mask: batch_features.b_action_masks
+            self._utterance_mask: batch_dialogues_features.b_padded_dialogue_length_mask,
+            self._features: batch_dialogues_features.b_featuress,
+            self._action: batch_dialogues_targets.b_action_ids,
+            self._action_mask: batch_dialogues_features.b_action_masks
         }
 
         if self.attention_mechanism:
-            feed_dict[self._emb_context] = batch_features.b_tokens_embeddings_paddeds
-            feed_dict[self._key] = batch_features.b_attn_keys
+            feed_dict[self._emb_context] = batch_dialogues_features.b_tokens_embeddings_paddeds
+            feed_dict[self._key] = batch_dialogues_features.b_attn_keys
 
         _, loss_value, prediction = self.sess.run([self._train_op, self._loss, self._prediction], feed_dict=feed_dict)
 
