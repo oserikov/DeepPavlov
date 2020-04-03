@@ -30,6 +30,20 @@ class UtteranceDataEntry:
         self.features = UtteranceFeatures(action_mask, attn_key, tokens_embeddings_padded, features)
         self.target = UtteranceTarget(action_id)
 
+    @staticmethod
+    def from_features_and_target(features: UtteranceFeatures, target: UtteranceTarget):
+        return UtteranceDataEntry(target.action_id, features.action_mask, features.attn_key,
+                                  features.tokens_embeddings_padded, features.features)
+
+    @staticmethod
+    def from_features(features:UtteranceFeatures):
+        return UtteranceDataEntry(action_id=None,
+                                  action_mask=features.action_mask, attn_key=features.attn_key,
+                                  tokens_embeddings_padded=features.tokens_embeddings_padded,
+                                  features=features.features)
+
+
+
 class DialogueFeatures:
     action_masks: List[np.ndarray[float]]
     attn_keys: List[np.ndarray[float]]

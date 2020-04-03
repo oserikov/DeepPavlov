@@ -45,17 +45,3 @@ class FeaturesEngineer:
             result_matches_state
         ], dtype=np.float32)
         return context_features
-
-    @staticmethod
-    def calc_attn_key(attn_hyperparams, intent_features, tracker_prev_action):
-        # todo to attn mechanism
-        attn_key = np.array([], dtype=np.float32)
-
-        if attn_hyperparams:
-            if attn_hyperparams.use_action_as_key:
-                attn_key = np.hstack((attn_key, tracker_prev_action))
-            if attn_hyperparams.use_intent_as_key:
-                attn_key = np.hstack((attn_key, intent_features))
-            if len(attn_key) == 0:
-                attn_key = np.array([1], dtype=np.float32)
-        return attn_key

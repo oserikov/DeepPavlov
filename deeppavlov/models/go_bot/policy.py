@@ -127,6 +127,20 @@ class PolicyNetwork(LRScheduledTFModel):
             input_size += features_params.num_intents
         return input_size
 
+    def calc_attn_key(self, intent_features, tracker_prev_action):
+        # todo dto-like class for the attended features
+
+        attn_key = np.array([], dtype=np.float32)
+
+        if self.attention_mechanism:
+            if self.attention_mechanism.action_as_key:
+                attn_key = np.hstack((attn_key, tracker_prev_action))
+            if self.attention_mechanism.intent_as_key:
+                attn_key = np.hstack((attn_key, intent_features))
+            if len(attn_key) == 0:
+                attn_key = np.array([1], dtype=np.float32)
+        return attn_key
+
     def _build_graph(self) -> None:
         self._add_placeholders()
 
@@ -244,6 +258,12 @@ class PolicyNetwork(LRScheduledTFModel):
         if self.attention_mechanism:
             attn_hyperparams = GobotAttnMechanism(self.attention_mechanism)
         return attn_hyperparams
+
+    def has_attn(self):
+        return self.attention_mechanism is not None
+
+    def get_attn_window_size(self):
+        return self.attention_mechanism.max_num_tokens if self.has_attn() else None
 
     def __call__(self, batch_dialogues_features: BatchDialoguesFeatures,
                  states_c: np.ndarray, states_h: np.ndarray, prob: bool = False,

@@ -28,6 +28,10 @@ class NLGHandler:
         return resp
 
     def generate_slotfilled_text_for_action(self, action_id: int, slots: dict):
+        """
+        Generate text for the predicted speech action using the pattern provided for the action.
+        The slotfilled state provides info to encapsulate to the pattern.
+        """
         text = self.templates.templates[action_id].generate_text(slots)
         return text
 
