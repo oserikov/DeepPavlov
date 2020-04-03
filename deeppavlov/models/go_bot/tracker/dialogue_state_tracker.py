@@ -12,147 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from abc import ABCMeta, abstractmethod
 from logging import getLogger
-from typing import List, Dict, Union, Tuple, Any, Iterator
+from typing import Dict, Any
 
 import numpy as np
 
-from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 from deeppavlov.models.go_bot.nlg_mechanism import NLGHandler
-from deeppavlov.models.go_bot.nlu_mechanism import NLUHandler
 from deeppavlov.models.go_bot.policy import PolicyNetworkParams
+from deeppavlov.models.go_bot.tracker.featurized_tracker import FeaturizedTracker
 
 log = getLogger(__name__)
-
-
-class Tracker(metaclass=ABCMeta):
-    """
-    An abstract class for trackers: a model that holds a dialogue state and
-    generates state features.
-    """
-
-    @abstractmethod
-    def update_state(self, slots: Union[List[Tuple[str, Any]], Dict[str, Any]]) -> None:
-        """
-        Updates dialogue state with new ``slots``, calculates features.
-
-        Returns:
-            Tracker: ."""
-        pass
-
-    @abstractmethod
-    def get_state(self) -> Dict[str, Any]:
-        """
-        Returns:
-            Dict[str, Any]: dictionary with current slots and their values."""
-        pass
-
-    @abstractmethod
-    def reset_state(self) -> None:
-        """Resets dialogue state"""
-        pass
-
-    @abstractmethod
-    def get_features(self) -> np.ndarray:
-        """
-        Returns:
-            np.ndarray[float]: numpy array with calculates state features."""
-        pass
-
-
-@register('featurized_tracker')
-class FeaturizedTracker(Tracker):
-    """
-    Tracker that overwrites slots with new values.
-    Features are binary features (slot is present/absent) plus difference features
-    (slot value is (the same)/(not the same) as before last update) and count
-    features (sum of present slots and sum of changed during last update slots).
-
-    Parameters:
-        slot_names: list of slots that should be tracked.
-    """
-
-    def __init__(self, slot_names: List[str]) -> None:
-        self.slot_names = list(slot_names)
-        self.history = []
-        self.current_features = None
-
-    @property
-    def state_size(self) -> int:
-        return len(self.slot_names)
-
-    @property
-    def num_features(self) -> int:
-        return self.state_size * 3 + 3
-
-    def update_state(self, slots):
-        if isinstance(slots, list):
-            self.history.extend(self._filter(slots))
-
-        elif isinstance(slots, dict):
-            for slot, value in self._filter(slots.items()):
-                self.history.append((slot, value))
-
-        prev_state = self.get_state()
-        bin_feats = self._binary_features()
-        diff_feats = self._diff_features(prev_state)
-        new_feats = self._new_features(prev_state)
-
-        self.current_features = np.hstack((
-            bin_feats,
-            diff_feats,
-            new_feats,
-            np.sum(bin_feats),
-            np.sum(diff_feats),
-            np.sum(new_feats))
-        )
-
-    def get_state(self):
-        # lasts = {}
-        # for slot, value in self.history:
-        #     lasts[slot] = value
-        # return lasts
-        return dict(self.history)
-
-    def reset_state(self):
-        self.history = []
-        self.current_features = np.zeros(self.num_features, dtype=np.float32)
-
-    def get_features(self):
-        return self.current_features
-
-    def _filter(self, slots) -> Iterator:
-        return filter(lambda s: s[0] in self.slot_names, slots)
-
-    def _binary_features(self) -> np.ndarray:
-        feats = np.zeros(self.state_size, dtype=np.float32)
-        lasts = self.get_state()
-        for i, slot in enumerate(self.slot_names):
-            if slot in lasts:
-                feats[i] = 1.
-        return feats
-
-    def _diff_features(self, state) -> np.ndarray:
-        feats = np.zeros(self.state_size, dtype=np.float32)
-        curr_state = self.get_state()
-
-        for i, slot in enumerate(self.slot_names):
-            if slot in curr_state and slot in state and curr_state[slot] != state[slot]:
-                feats[i] = 1.
-
-        return feats
-
-    def _new_features(self, state) -> np.ndarray:
-        feats = np.zeros(self.state_size, dtype=np.float32)
-        curr_state = self.get_state()
-
-        for i, slot in enumerate(self.slot_names):
-            if slot in curr_state and slot not in state:
-                feats[i] = 1.
-
-        return feats
 
 
 class DialogueStateTracker(FeaturizedTracker):

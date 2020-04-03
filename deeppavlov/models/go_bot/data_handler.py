@@ -4,11 +4,6 @@ from typing import List
 
 import numpy as np
 
-# from deeppavlov.models.go_bot.network import log
-import deeppavlov.models.go_bot.templates as templ
-from deeppavlov.core.commands.utils import expand_path
-from deeppavlov.models.go_bot.tracker import DialogueStateTracker
-
 log = getLogger(__name__)
 
 class TokensVectorRepresentationParams:
@@ -57,9 +52,9 @@ class DataHandler:
         return np.random.normal(0, 1 / vector_dim, vector_dim)
 
     @staticmethod
-    def pad_sequence_to_size(attn_hyperparams, tokens_embedded):
-        padding_length = attn_hyperparams.window_size - len(tokens_embedded)
-        padding = np.zeros(shape=(padding_length, attn_hyperparams.token_size), dtype=np.float32)
+    def pad_sequence_to_size(padding_length, token_dim, tokens_embedded):
+        padding_length = padding_length - len(tokens_embedded)
+        padding = np.zeros(shape=(padding_length, token_dim), dtype=np.float32)
         if tokens_embedded:
             emb_context = np.concatenate((padding, np.array(tokens_embedded)))
         else:
@@ -73,15 +68,15 @@ class DataHandler:
             emb_features = np.fabs(self.standard_normal_like(emb_features))
         return emb_features
 
-    def calc_tokens_embeddings(self, padding_length, tokens):
+    def calc_tokens_embeddings(self, padding_length, token_dim, tokens):
         tokens_embedded = self.embed_tokens(tokens, False)
         if tokens_embedded is not None:
-            emb_context = self.pad_sequence_to_size(padding_length, tokens_embedded)
+            emb_context = self.pad_sequence_to_size(padding_length, token_dim, tokens_embedded)
         else:
             emb_context = np.array([], dtype=np.float32)
         return emb_context
 
     def get_dims(self):
         embedder_dim = self.embedder.dim if self.embedder else None
-        bow_encoder_dim = self.word_vocab if self.word_vocab else None
+        bow_encoder_dim = len(self.word_vocab) if self.word_vocab else None
         return TokensVectorRepresentationParams(embedder_dim, bow_encoder_dim)

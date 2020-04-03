@@ -27,7 +27,8 @@ from deeppavlov.models.go_bot.features_engineerer import FeaturesParams
 from deeppavlov.models.go_bot.nlg_mechanism import NLGHandler
 from deeppavlov.models.go_bot.nlu_mechanism import NLUHandler
 from deeppavlov.models.go_bot.policy import PolicyNetwork, PolicyNetworkParams
-from deeppavlov.models.go_bot.tracker import FeaturizedTracker, DialogueStateTracker, MultipleUserStateTrackersPool
+from deeppavlov.models.go_bot.tracker.featurized_tracker import FeaturizedTracker
+from deeppavlov.models.go_bot.tracker.dialogue_state_tracker import DialogueStateTracker, MultipleUserStateTrackersPool
 from pathlib import Path
 
 log = getLogger(__name__)
@@ -68,7 +69,7 @@ class GoalOrientedBot(NNModel):
             * **max_num_tokens** – maximum number of input tokens.
             * **depth** – number of averages used in constrained attentions
               (``'cs_bahdanau'`` or ``'cs_general'``).
-            * **action_as_key** – whether to use action from previous timestep as key
+            * **action_as_key** – whether to use action from previous time step as key
               to attention.
             * **intent_as_key** – use utterance intents as attention key or not.
             * **projected_align** – whether to use output projection.
@@ -259,7 +260,7 @@ class GoalOrientedBot(NNModel):
         """
         # todo comments
 
-        context_slots, intent_features, tokens = self.nlu(text)  # todo: dto-like class for the nlu output
+        context_slots, intent_features, tokens = self.nlu_handler.nlu(text)  # todo: dto-like class for the nlu output
 
         # region text BOW-encoding and embedding
         tokens_bow_encoded = []
@@ -270,7 +271,10 @@ class GoalOrientedBot(NNModel):
         tokens_aggregated_embedding = []
         if self.policy.has_attn():
             attn_window_size = self.policy.get_attn_window_size()
-            tokens_embeddings_padded = self.data_handler.calc_tokens_embeddings(attn_window_size, tokens)
+            attn_config_token_dim = self.policy.get_attn_hyperparams().token_size  # todo: this is ugly and caused by complicated nn configuration algorithm
+            tokens_embeddings_padded = self.data_handler.calc_tokens_embeddings(attn_window_size,
+                                                                                attn_config_token_dim,
+                                                                                tokens)
         else:
             tokens_aggregated_embedding = self.data_handler.calc_tokens_embedding(tokens)
         # endregion text BOW-encoding and embedding
@@ -308,7 +312,7 @@ class GoalOrientedBot(NNModel):
         Used to keep tracker's state intact when predicting the action to perform right after the api call action
         is predicted and performed.
 
-        :return: the actions probas distribution from the policy net output layer,
+        :return: the actions probabilities distribution from the policy net output layer,
         the index of the most probable action, the network state vector
         (as for RNNs: output, hidden_state <- RNN(output, hidden_state))
         """

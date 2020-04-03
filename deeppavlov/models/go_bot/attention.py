@@ -28,9 +28,9 @@ class GobotAttnParams:
     def configure_attn(attn,
                        tokens_dims: TokensVectorRepresentationParams,
                        features_params: FeaturesParams):
-        curr_attn_token_size = attn.get('token_size'),
-        curr_attn_action_as_key = attn.get('action_as_key'),
-        curr_attn_intent_as_key = attn.get('intent_as_key'),
+        curr_attn_token_size = attn.get('token_size')
+        curr_attn_action_as_key = attn.get('action_as_key')
+        curr_attn_intent_as_key = attn.get('intent_as_key')
         curr_attn_key_size = attn.get('key_size')
 
         token_size = curr_attn_token_size or tokens_dims.embedding_dim

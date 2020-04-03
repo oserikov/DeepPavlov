@@ -7,7 +7,7 @@ import tensorflow as tf
 
 from deeppavlov.core.common.errors import ConfigError
 from deeppavlov.core.layers import tf_attention_mechanisms as am, tf_layers
-# noinspection PyUnresolvedReferences
+
 from tensorflow.contrib.layers import xavier_initializer as xav
 
 from deeppavlov.core.models.tf_model import LRScheduledTFModel

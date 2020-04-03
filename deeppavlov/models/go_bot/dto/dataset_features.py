@@ -5,9 +5,9 @@ import numpy as np
 # todo while keeping performance remove boilerplate duplications
 
 class UtteranceFeatures:
-    action_mask: np.ndarray[float]
-    attn_key: np.ndarray[float]
-    tokens_embeddings_padded: np.ndarray[float]
+    action_mask: np.ndarray
+    attn_key: np.ndarray
+    tokens_embeddings_padded: np.ndarray
     features: np.ndarray
 
     def __init__(self, action_mask, attn_key, tokens_embeddings_padded, features):
@@ -45,9 +45,9 @@ class UtteranceDataEntry:
 
 
 class DialogueFeatures:
-    action_masks: List[np.ndarray[float]]
-    attn_keys: List[np.ndarray[float]]
-    tokens_embeddings_paddeds: List[np.ndarray[float]]
+    action_masks: List[np.ndarray]
+    attn_keys: List[np.ndarray]
+    tokens_embeddings_paddeds: List[np.ndarray]
     featuress: List[np.ndarray]
 
     def __init__(self):
@@ -130,9 +130,9 @@ class PaddedDialogueDataEntry(DialogueDataEntry):
         self.targets = PaddedDialogueTargets(dialogue_data_entry.targets, sequence_length)
 
 class BatchDialoguesFeatures:
-    b_action_masks: List[List[np.ndarray[float]]]
-    b_attn_keys: List[List[np.ndarray[float]]]
-    b_tokens_embeddings_paddeds: List[List[np.ndarray[float]]]
+    b_action_masks: List[List[np.ndarray]]
+    b_attn_keys: List[List[np.ndarray]]
+    b_tokens_embeddings_paddeds: List[List[np.ndarray]]
     b_featuress: List[List[np.ndarray]]
     b_padded_dialogue_length_mask: List[List[int]]
     max_dialogue_length: int
