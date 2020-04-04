@@ -1,5 +1,5 @@
 import json
-from typing import Tuple, Optional, Sequence
+from typing import Tuple, Optional, Sequence, NamedTuple
 from logging import getLogger
 
 import numpy as np
@@ -14,7 +14,6 @@ from deeppavlov.core.models.tf_model import LRScheduledTFModel
 
 from deeppavlov.models.go_bot.data_handler import TokensVectorRepresentationParams
 from deeppavlov.models.go_bot.dto.dataset_features import BatchDialoguesFeatures, BatchDialoguesTargets
-from deeppavlov.models.go_bot.attention import GobotAttnMechanism, GobotAttnParams
 
 # todo
 from deeppavlov.models.go_bot.features_engineerer import FeaturesParams
@@ -72,6 +71,17 @@ class PolicyNetworkParams:
                         f" deeppavlov.core.models.lr_scheduled_tf_model"
                         f" or read a github tutorial on super convergence.")
 
+class GobotAttnParams(NamedTuple):
+    max_num_tokens: int
+    hidden_size: int
+    token_size: int
+    key_size: int
+    type_: str
+    projected_align: bool
+    depth: int
+    action_as_key: bool
+    intent_as_key: bool
+
 class PolicyNetwork(LRScheduledTFModel):
 
     GRAPH_PARAMS = ["hidden_size", "action_size", "dense_size", "attention_mechanism"]
@@ -100,7 +110,7 @@ class PolicyNetwork(LRScheduledTFModel):
 
         attn_params_passed = network_params_passed.get_attn_params()
         if attn_params_passed:
-            self.attention_mechanism = GobotAttnParams.configure_attn(attn_params_passed, tokens_dims, features_params)
+            self.attention_mechanism = self.configure_attn(attn_params_passed, tokens_dims, features_params)
             self.input_size -= self.attention_mechanism.token_size
         else:
             self.attention_mechanism = None
@@ -126,6 +136,39 @@ class PolicyNetwork(LRScheduledTFModel):
         if features_params.num_intents:
             input_size += features_params.num_intents
         return input_size
+
+    @staticmethod
+    def configure_attn(attn,
+                       tokens_dims: TokensVectorRepresentationParams,
+                       features_params: FeaturesParams):
+        curr_attn_token_size = attn.get('token_size')
+        curr_attn_action_as_key = attn.get('action_as_key')
+        curr_attn_intent_as_key = attn.get('intent_as_key')
+        curr_attn_key_size = attn.get('key_size')
+
+        token_size = curr_attn_token_size or tokens_dims.embedding_dim
+        action_as_key = curr_attn_action_as_key or False
+        intent_as_key = curr_attn_intent_as_key or False
+
+        possible_key_size = 0
+        if action_as_key:
+            possible_key_size += features_params.num_actions
+        if intent_as_key and features_params.num_intents:
+            possible_key_size += features_params.num_intents
+        possible_key_size = possible_key_size or 1
+        key_size = curr_attn_key_size or possible_key_size
+
+        gobot_attn_params = GobotAttnParams(max_num_tokens=attn.get("max_num_tokens"),
+                                            hidden_size=attn.get("hidden_size"),
+                                            token_size=token_size,
+                                            key_size=key_size,
+                                            type_=attn.get("type"),
+                                            projected_align=attn.get("projected_align"),
+                                            depth=attn.get("depth"),
+                                            action_as_key=action_as_key,
+                                            intent_as_key=intent_as_key)
+
+        return gobot_attn_params
 
     def calc_attn_key(self, intent_features, tracker_prev_action):
         # todo dto-like class for the attended features
@@ -218,31 +261,31 @@ class PolicyNetwork(LRScheduledTFModel):
         return _logits, _state
 
     def _build_attn_body(self):
-        attn_scope = f"attention_mechanism/{self.attention_mechanism.type}"
+        attn_scope = f"attention_mechanism/{self.attention_mechanism.type_}"
         with tf.variable_scope(attn_scope):
-            if self.attention_mechanism.type == 'general':
+            if self.attention_mechanism.type_ == 'general':
                 _attn_output = am.general_attention(self._key, self._emb_context,
                                                     hidden_size=self.attention_mechanism.hidden_size,
                                                     projected_align=self.attention_mechanism.projected_align)
-            elif self.attention_mechanism.type == 'bahdanau':
+            elif self.attention_mechanism.type_ == 'bahdanau':
                 _attn_output = am.bahdanau_attention(self._key, self._emb_context,
                                                      hidden_size=self.attention_mechanism.hidden_size,
                                                      projected_align=self.attention_mechanism.projected_align)
-            elif self.attention_mechanism.type == 'cs_general':
+            elif self.attention_mechanism.type_ == 'cs_general':
                 _attn_output = am.cs_general_attention(self._key, self._emb_context,
                                                        hidden_size=self.attention_mechanism.hidden_size,
                                                        depth=self.attention_mechanism.depth,
                                                        projected_align=self.attention_mechanism.projected_align)
-            elif self.attention_mechanism.type == 'cs_bahdanau':
+            elif self.attention_mechanism.type_ == 'cs_bahdanau':
                 _attn_output = am.cs_bahdanau_attention(self._key, self._emb_context,
                                                         hidden_size=self.attention_mechanism.hidden_size,
                                                         depth=self.attention_mechanism.depth,
                                                         projected_align=self.attention_mechanism.projected_align)
-            elif self.attention_mechanism.type == 'light_general':
+            elif self.attention_mechanism.type_ == 'light_general':
                 _attn_output = am.light_general_attention(self._key, self._emb_context,
                                                           hidden_size=self.attention_mechanism.hidden_size,
                                                           projected_align=self.attention_mechanism.projected_align)
-            elif self.attention_mechanism.type == 'light_bahdanau':
+            elif self.attention_mechanism.type_ == 'light_bahdanau':
                 _attn_output = am.light_bahdanau_attention(self._key, self._emb_context,
                                                            hidden_size=self.attention_mechanism.hidden_size,
                                                            projected_align=self.attention_mechanism.projected_align)
@@ -253,10 +296,10 @@ class PolicyNetwork(LRScheduledTFModel):
     def train_checkpoint_exists(self):
         return tf.train.checkpoint_exists(str(self.load_path.resolve()))
 
-    def get_attn_hyperparams(self) -> Optional[GobotAttnMechanism]:
+    def get_attn_hyperparams(self) -> Optional[GobotAttnParams]:
         attn_hyperparams = None
         if self.attention_mechanism:
-            attn_hyperparams = GobotAttnMechanism(self.attention_mechanism)
+            attn_hyperparams = self.attention_mechanism
         return attn_hyperparams
 
     def has_attn(self):

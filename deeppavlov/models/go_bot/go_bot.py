@@ -20,7 +20,7 @@ import numpy as np
 from deeppavlov.core.common.registry import register
 from deeppavlov.core.models.component import Component
 from deeppavlov.core.models.nn_model import NNModel
-from deeppavlov.models.go_bot.data_handler import DataHandler
+from deeppavlov.models.go_bot.data_handler import TokensVectorizer
 from deeppavlov.models.go_bot.dto.dataset_features import UtteranceDataEntry, DialogueDataEntry, \
     BatchDialoguesDataset, UtteranceFeatures, UtteranceTarget
 from deeppavlov.models.go_bot.features_engineerer import FeaturesParams
@@ -141,7 +141,7 @@ class GoalOrientedBot(NNModel):
 
         self.nlu_handler = NLUHandler(tokenizer, slot_filler, intent_classifier)
         self.nlg_handler = NLGHandler(template_path, template_type, api_call_action)
-        self.data_handler = DataHandler(debug, word_vocab, bow_embedder, embedder)
+        self.data_handler = TokensVectorizer(debug, word_vocab, bow_embedder, embedder)
 
         self.dialogue_state_tracker = DialogueStateTracker.from_gobot_params(tracker, self.nlg_handler,
                                                                              policy_network_params, database)

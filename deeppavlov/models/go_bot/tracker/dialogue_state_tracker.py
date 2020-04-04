@@ -24,7 +24,7 @@ from deeppavlov.models.go_bot.tracker.featurized_tracker import FeaturizedTracke
 
 log = getLogger(__name__)
 
-
+# todo naming
 class DialogueStateTracker(FeaturizedTracker):
     def __init__(self, slot_names, n_actions: int, hidden_size: int, database: Component = None) -> None:
         super().__init__(slot_names)

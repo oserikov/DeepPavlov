@@ -2,7 +2,8 @@ from typing import List
 
 import numpy as np
 
-# todo while keeping performance remove boilerplate duplications
+# todo remove boilerplate duplications
+# todo docstrings & comments
 
 class UtteranceFeatures:
     action_mask: np.ndarray
@@ -41,8 +42,6 @@ class UtteranceDataEntry:
                                   action_mask=features.action_mask, attn_key=features.attn_key,
                                   tokens_embeddings_padded=features.tokens_embeddings_padded,
                                   features=features.features)
-
-
 
 class DialogueFeatures:
     action_masks: List[np.ndarray]
