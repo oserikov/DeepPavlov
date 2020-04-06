@@ -28,20 +28,20 @@ def main():
 
     data = SimpleDSTC2DatasetReader.read("my_data")
 
-    with open('my_data/simple-dstc2-trn.json', 'rt') as fin:
-        d = json.load(fin)
-    with open('my_data/simple-dstc2-trn.json', 'wt') as fout:
-        json.dump(d[:60], fout, indent=2)
-
-    with open('my_data/simple-dstc2-tst.json', 'rt') as fin:
-        d = json.load(fin)
-    with open('my_data/simple-dstc2-tst.json', 'wt') as fout:
-        json.dump(d[:60], fout, indent=2)
-
-    with open('my_data/simple-dstc2-val.json', 'rt') as fin:
-        d = json.load(fin)
-    with open('my_data/simple-dstc2-val.json', 'wt') as fout:
-        json.dump(d[:60], fout, indent=2)
+    # with open('my_data/simple-dstc2-trn.json', 'rt') as fin:
+    #     d = json.load(fin)
+    # with open('my_data/simple-dstc2-trn.json', 'wt') as fout:
+    #     json.dump(d[:60], fout, indent=2)
+    #
+    # with open('my_data/simple-dstc2-tst.json', 'rt') as fin:
+    #     d = json.load(fin)
+    # with open('my_data/simple-dstc2-tst.json', 'wt') as fout:
+    #     json.dump(d[:60], fout, indent=2)
+    #
+    # with open('my_data/simple-dstc2-val.json', 'rt') as fin:
+    #     d = json.load(fin)
+    # with open('my_data/simple-dstc2-val.json', 'wt') as fout:
+    #     json.dump(d[:60], fout, indent=2)
 
     iterator = DialogDatasetIterator(data)
 
@@ -59,14 +59,14 @@ def main():
 
     shutil.copyfile("my_data/simple-dstc2-trn.json", "my_data/simple-dstc2-trn.full.json")
 
-    NUM_TRAIN = 50
+    # NUM_TRAIN = 50
 
 
-    with open('my_data/simple-dstc2-trn.full.json', 'rt') as fin:
-        data = json.load(fin)
-    with open('my_data/simple-dstc2-trn.json', 'wt') as fout:
-        json.dump(data[:NUM_TRAIN], fout, indent=2)
-    print(f"Train set is reduced to {NUM_TRAIN} dialogues (out of {len(data)}).")
+    # with open('my_data/simple-dstc2-trn.full.json', 'rt') as fin:
+    #     data = json.load(fin)
+    # with open('my_data/simple-dstc2-trn.json', 'wt') as fout:
+    #     json.dump(data[:NUM_TRAIN], fout, indent=2)
+    # print(f"Train set is reduced to {NUM_TRAIN} dialogues (out of {len(data)}).")
 
     database = Sqlite3Database(primary_keys=["name"],
                                save_path="my_bot/db.sqlite")
@@ -122,8 +122,8 @@ def main():
     gobot_config['metadata']['variables']['DATA_PATH'] = 'my_data'
     gobot_config['metadata']['variables']['MODEL_PATH'] = 'my_bot'
 
-    gobot_config['train']['batch_size'] = 8  # batch size
-    gobot_config['train']['max_batches'] = 5  # maximum number of training batches
+    # gobot_config['train']['batch_size'] = 8  # batch size
+    # gobot_config['train']['max_batches'] = 5  # maximum number of training batches
     gobot_config['train']['log_on_k_batches'] = 1
     gobot_config['train']['val_every_n_batches'] = 1  # evaluate on full 'valid' split each n batches
     gobot_config['train']['log_every_n_batches'] = 1  # evaluate on 20 batches of 'train' split every n batches
