@@ -420,7 +420,6 @@ class GoalOrientedBot(NNModel):
             tracker_slotfilled_state = self.dialogue_state_tracker.fill_current_state_with_db_results()
 
             resp = self.nlg_handler.generate_slotfilled_text_for_action(action_id_predicted, tracker_slotfilled_state)
-            # resp = self.nlg_handler.decode_response(action_id_predicted, self.dialogue_state_tracker)
             res.append(resp)
         return res
 
